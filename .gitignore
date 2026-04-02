@@ -1,0 +1,52 @@
+# Unreal Engine generated folders
+/Binaries/
+/DerivedDataCache/
+/Intermediate/
+/Saved/
+
+# Unreal Engine plugin generated folders
+/Plugins/*/Binaries/
+/Plugins/*/DerivedDataCache/
+/Plugins/*/Intermediate/
+/Plugins/*/Saved/
+
+# IDE and editor settings
+/.idea/
+/.vs/
+/.vscode/
+*.code-workspace
+*.sln
+*.suo
+*.user
+*.userprefs
+*.vcxproj
+*.vcxproj.filters
+*.VC.db
+*.VC.opendb
+*.opensdf
+*.opendb
+*.sdf
+*.xcodeproj
+*.xcworkspace
+/.vsconfig
+
+# Logs and caches
+*.log
+*.tmp
+*.cache
+*.pid
+Thumbs.db
+.DS_Store
+
+# Python cache occasionally created by helper scripts
+__pycache__/
+*.pyc
+
+# Always keep core Unreal project files versioned
+!/Config/
+!/Config/**
+!/Content/
+!/Content/**
+!/Source/
+!/Source/**
+!/*.uproject

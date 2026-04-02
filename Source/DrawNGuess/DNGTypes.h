@@ -56,6 +56,21 @@ struct FDNGRoundResult
 
 	UPROPERTY(BlueprintReadOnly)
 	bool bGuessAccepted = false;
+
+	UPROPERTY(BlueprintReadOnly)
+	float PositiveProbability = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly)
+	float NegativeProbability = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly)
+	FString ScoringBackend;
+
+	UPROPERTY(BlueprintReadOnly)
+	FString DiagnosticMessage;
+
+	UPROPERTY(BlueprintReadOnly)
+	FString SavedBoardPath;
 };
 
 USTRUCT(BlueprintType)

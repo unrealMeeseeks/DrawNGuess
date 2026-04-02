@@ -1,6 +1,7 @@
 #include "DNGGameMode.h"
 
 #include "DNGBoardActor.h"
+#include "DNGClipScorer.h"
 #include "DNGGameInstance.h"
 #include "DNGGameState.h"
 #include "DNGPlayerController.h"
@@ -21,6 +22,7 @@ void ADNGGameMode::BeginPlay()
 	Super::BeginPlay();
 
 	EnsureBoardActor();
+	InitializeClipScorer();
 	ApplyPromptSettings();
 	EnterLobby();
 	RefreshBoardViewTargets();
@@ -103,16 +105,11 @@ void ADNGGameMode::HandleSubmitGuess(ADNGPlayerController* RequestingController,
 
 	const FDNGPromptSettings PromptSettings = DNGGameState->GetPromptSettings();
 	const FString SanitizedGuess = GuessText.TrimStartAndEnd();
-	const int32 Seed = GetTypeHash(SanitizedGuess) ^ (DNGGameState->GetRoundNumber() * 7919);
-	FRandomStream Stream(Seed);
-
-	FDNGRoundResult Result;
-	Result.GuessText = SanitizedGuess;
-	Result.PositivePrompt = PromptSettings.PositivePrefix.Replace(TEXT("{}"), *SanitizedGuess);
-	Result.NegativePrompt = PromptSettings.NegativePrefix.Replace(TEXT("{}"), *SanitizedGuess);
-	Result.PositiveScore = SanitizedGuess.IsEmpty() ? 0.0f : Stream.FRandRange(0.45f, 0.98f);
-	Result.NegativeScore = Stream.FRandRange(0.05f, 0.85f);
-	Result.bGuessAccepted = !SanitizedGuess.IsEmpty() && Result.PositiveScore > Result.NegativeScore;
+	FDNGRoundResult Result = BuildFallbackRoundResult(SanitizedGuess, PromptSettings);
+	if (bPreferClipScoring)
+	{
+		TryPopulateClipRoundResult(Result);
+	}
 
 	if (Result.bGuessAccepted)
 	{
@@ -166,6 +163,20 @@ void ADNGGameMode::EnsureBoardActor()
 	if (ADNGGameState* DNGGameState = GetGameState<ADNGGameState>())
 	{
 		DNGGameState->SetBoardActor(SpawnedBoardActor);
+	}
+}
+
+void ADNGGameMode::InitializeClipScorer()
+{
+	if (ClipScorer)
+	{
+		return;
+	}
+
+	ClipScorer = NewObject<UDNGClipScorer>(this);
+	if (ClipScorer)
+	{
+		ClipScorer->Configure(ClipRuntimeName, ClipImageEncoderModel, ClipTextEncoderModel, ClipTokenizerDirectory);
 	}
 }
 
@@ -305,4 +316,101 @@ ADNGPlayerState* ADNGGameMode::ResolvePainterForRound(const TArray<ADNGPlayerSta
 	const ADNGGameState* DNGGameState = GetGameState<ADNGGameState>();
 	const int32 RoundIndex = DNGGameState ? FMath::Max(0, DNGGameState->GetRoundNumber() - 1) : 0;
 	return Players[RoundIndex % Players.Num()];
+}
+
+FDNGRoundResult ADNGGameMode::BuildFallbackRoundResult(const FString& GuessText, const FDNGPromptSettings& PromptSettings) const
+{
+	const ADNGGameState* DNGGameState = GetGameState<ADNGGameState>();
+	const int32 Seed = GetTypeHash(GuessText) ^ ((DNGGameState ? DNGGameState->GetRoundNumber() : 0) * 7919);
+	FRandomStream Stream(Seed);
+
+	FDNGRoundResult Result;
+	Result.GuessText = GuessText;
+	Result.PositivePrompt = PromptSettings.PositivePrefix.Replace(TEXT("{}"), *GuessText);
+	Result.NegativePrompt = PromptSettings.NegativePrefix.Replace(TEXT("{}"), *GuessText);
+	Result.PositiveScore = GuessText.IsEmpty() ? 0.0f : Stream.FRandRange(0.45f, 0.98f);
+	Result.NegativeScore = Stream.FRandRange(0.05f, 0.85f);
+	Result.bGuessAccepted = !GuessText.IsEmpty() && Result.PositiveScore > Result.NegativeScore;
+	ApplySoftmaxProbabilities(Result, 1.0f);
+	Result.ScoringBackend = TEXT("Mock");
+	Result.DiagnosticMessage = TEXT("Using placeholder scores until CLIP scoring succeeds.");
+	return Result;
+}
+
+void ADNGGameMode::ApplySoftmaxProbabilities(FDNGRoundResult& InOutResult, float LogitScale) const
+{
+	const double PositiveLogit = static_cast<double>(InOutResult.PositiveScore) * static_cast<double>(LogitScale);
+	const double NegativeLogit = static_cast<double>(InOutResult.NegativeScore) * static_cast<double>(LogitScale);
+	const double MaxLogit = FMath::Max(PositiveLogit, NegativeLogit);
+
+	const double PositiveExp = FMath::Exp(PositiveLogit - MaxLogit);
+	const double NegativeExp = FMath::Exp(NegativeLogit - MaxLogit);
+	const double SumExp = PositiveExp + NegativeExp;
+
+	if (SumExp <= UE_DOUBLE_SMALL_NUMBER)
+	{
+		InOutResult.PositiveProbability = 0.5f;
+		InOutResult.NegativeProbability = 0.5f;
+		return;
+	}
+
+	InOutResult.PositiveProbability = static_cast<float>(PositiveExp / SumExp);
+	InOutResult.NegativeProbability = static_cast<float>(NegativeExp / SumExp);
+}
+
+bool ADNGGameMode::TryPopulateClipRoundResult(FDNGRoundResult& InOutResult)
+{
+	if (!ClipScorer || !SpawnedBoardActor)
+	{
+		return false;
+	}
+
+	FString SavedBoardPath;
+	if (!SpawnedBoardActor->SaveBoardImage(SavedBoardPath))
+	{
+		InOutResult.DiagnosticMessage = TEXT("CLIP probe skipped: failed to export the board image on the server.");
+		return false;
+	}
+
+	InOutResult.SavedBoardPath = SavedBoardPath;
+
+	FString ErrorMessage;
+	if (!ClipScorer->Initialize(ErrorMessage))
+	{
+		InOutResult.DiagnosticMessage = FString::Printf(TEXT("CLIP initialization failed: %s"), *ErrorMessage);
+		return false;
+	}
+
+	TArray<float> ImageEmbedding;
+	if (!ClipScorer->EncodeImageFile(SavedBoardPath, ImageEmbedding, ErrorMessage))
+	{
+		InOutResult.DiagnosticMessage = FString::Printf(TEXT("CLIP image encoder failed: %s"), *ErrorMessage);
+		return false;
+	}
+
+	float PositiveScore = 0.0f;
+	float NegativeScore = 0.0f;
+	FString PositiveError;
+	FString NegativeError;
+	const bool bPositiveScored = ClipScorer->ScoreImageAgainstText(SavedBoardPath, InOutResult.PositivePrompt, PositiveScore, PositiveError);
+	const bool bNegativeScored = ClipScorer->ScoreImageAgainstText(SavedBoardPath, InOutResult.NegativePrompt, NegativeScore, NegativeError);
+
+	if (!bPositiveScored || !bNegativeScored)
+	{
+		InOutResult.ScoringBackend = TEXT("Mock + CLIP image probe");
+		InOutResult.DiagnosticMessage = FString::Printf(
+			TEXT("CLIP image encoder is working (%d dims), but text scoring is not ready. Positive: %s Negative: %s"),
+			ImageEmbedding.Num(),
+			bPositiveScored ? TEXT("ok") : *PositiveError,
+			bNegativeScored ? TEXT("ok") : *NegativeError);
+		return false;
+	}
+
+	InOutResult.PositiveScore = PositiveScore;
+	InOutResult.NegativeScore = NegativeScore;
+	ApplySoftmaxProbabilities(InOutResult, ClipLogitScale);
+	InOutResult.bGuessAccepted = !InOutResult.GuessText.IsEmpty() && PositiveScore > NegativeScore;
+	InOutResult.ScoringBackend = TEXT("CLIP");
+	InOutResult.DiagnosticMessage = FString::Printf(TEXT("CLIP image/text encoders produced %d-d embeddings. Softmax scale=%.2f"), ImageEmbedding.Num(), ClipLogitScale);
+	return true;
 }

@@ -216,13 +216,19 @@ FString ADNGPlayerController::GetResultDescription() const
 		}
 
 		return FString::Printf(
-			TEXT("Guess: %s\nPositive: %s\nNegative: %s\nPositive score: %.3f\nNegative score: %.3f\nDecision: %s"),
+			TEXT("Guess: %s\nPositive: %s\nNegative: %s\nPositive score: %.6f\nNegative score: %.6f\nScore delta: %.6f\nPositive probability: %.6f\nNegative probability: %.6f\nDecision: %s\nBackend: %s\nSaved board: %s\nDiagnostic: %s"),
 			*Result.GuessText,
 			*Result.PositivePrompt,
 			*Result.NegativePrompt,
 			Result.PositiveScore,
 			Result.NegativeScore,
-			Result.bGuessAccepted ? TEXT("Accepted") : TEXT("Rejected"));
+			Result.PositiveScore - Result.NegativeScore,
+			Result.PositiveProbability,
+			Result.NegativeProbability,
+			Result.bGuessAccepted ? TEXT("Accepted") : TEXT("Rejected"),
+			Result.ScoringBackend.IsEmpty() ? TEXT("Unknown") : *Result.ScoringBackend,
+			Result.SavedBoardPath.IsEmpty() ? TEXT("(none)") : *Result.SavedBoardPath,
+			Result.DiagnosticMessage.IsEmpty() ? TEXT("(none)") : *Result.DiagnosticMessage);
 	}
 
 	return TEXT("No result yet");

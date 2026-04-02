@@ -6,9 +6,12 @@
 #include "Engine/CollisionProfile.h"
 #include "Engine/Engine.h"
 #include "Engine/TextureRenderTarget2D.h"
+#include "HAL/FileManager.h"
 #include "Kismet/KismetRenderingLibrary.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
+#include "Misc/DateTime.h"
+#include "Misc/Paths.h"
 #include "Engine/StaticMesh.h"
 #include "Net/UnrealNetwork.h"
 #include "UObject/ConstructorHelpers.h"
@@ -48,18 +51,14 @@ ADNGBoardActor::ADNGBoardActor()
 	BoardCamera->SetRelativeRotation(FRotator(-90.0f, -90.0f, 0.0f));
 	BoardCamera->ProjectionMode = ECameraProjectionMode::Orthographic;
 	BoardCamera->OrthoWidth = 1800.0f;
-
-	BoardMesh->SetRelativeScale3D(FVector(BoardSize.X / 100.0f, BoardSize.Y / 100.0f, 1.0f));
 }
 
 void ADNGBoardActor::BeginPlay()
 {
 	Super::BeginPlay();
 
-	BoardMesh->SetRelativeScale3D(FVector(BoardSize.X / 100.0f, BoardSize.Y / 100.0f, 1.0f));
 	BoardCamera->OrthoWidth = FMath::Max(BoardSize.X, BoardSize.Y) * 1.2f;
-	EnsureBoardSurface();
-	SyncReplicatedSegments();
+	RefreshBoardVisuals();
 }
 
 void ADNGBoardActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -132,9 +131,15 @@ void ADNGBoardActor::OnRep_Segments()
 
 void ADNGBoardActor::EnsureBoardSurface()
 {
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
 	if (!BoardRenderTarget)
 	{
-		BoardRenderTarget = UKismetRenderingLibrary::CreateRenderTarget2D(this, RenderTargetSize.X, RenderTargetSize.Y, RTF_RGBA8);
+		BoardRenderTarget = UKismetRenderingLibrary::CreateRenderTarget2D(World, RenderTargetSize.X, RenderTargetSize.Y, RTF_RGBA8);
 	}
 
 	if (!BoardMaterialInstance)
@@ -157,14 +162,65 @@ void ADNGBoardActor::EnsureBoardSurface()
 	}
 }
 
-void ADNGBoardActor::ResetBoardSurface()
+void ADNGBoardActor::RefreshBoardVisuals()
 {
+	EnsureBoardSurface();
+
 	if (!BoardRenderTarget)
 	{
 		return;
 	}
 
-	UKismetRenderingLibrary::ClearRenderTarget2D(this, BoardRenderTarget, BoardClearColor);
+	ResetBoardSurface();
+
+	for (const FDNGDrawSegment& Segment : Segments)
+	{
+		DrawSegmentToBoard(Segment);
+	}
+
+	for (const FDNGDrawSegment& Segment : PendingPredictedSegments)
+	{
+		DrawSegmentToBoard(Segment);
+	}
+
+	AppliedReplicatedSegmentCount = Segments.Num();
+}
+
+bool ADNGBoardActor::SaveBoardImage(FString& OutSavedPath)
+{
+	OutSavedPath.Reset();
+
+	UWorld* World = GetWorld();
+	EnsureBoardSurface();
+	if (!World || !BoardRenderTarget)
+	{
+		return false;
+	}
+
+	const FString SaveDirectory = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Drawings"));
+	IFileManager::Get().MakeDirectory(*SaveDirectory, true);
+
+	const FString FileBaseName = FString::Printf(
+		TEXT("board_%s_%s"),
+		*FDateTime::Now().ToString(TEXT("%Y%m%d_%H%M%S")),
+		*FGuid::NewGuid().ToString(EGuidFormats::Digits));
+	const FString FileName = FileBaseName + TEXT(".png");
+
+	UKismetRenderingLibrary::ExportRenderTarget(World, BoardRenderTarget, SaveDirectory, FileName);
+
+	OutSavedPath = FPaths::Combine(SaveDirectory, FileName);
+	return true;
+}
+
+void ADNGBoardActor::ResetBoardSurface()
+{
+	UWorld* World = GetWorld();
+	if (!World || !BoardRenderTarget)
+	{
+		return;
+	}
+
+	UKismetRenderingLibrary::ClearRenderTarget2D(World, BoardRenderTarget, BoardClearColor);
 }
 
 void ADNGBoardActor::SyncReplicatedSegments()
@@ -205,7 +261,8 @@ void ADNGBoardActor::SyncReplicatedSegments()
 
 void ADNGBoardActor::DrawSegmentToBoard(const FDNGDrawSegment& Segment)
 {
-	if (!BoardRenderTarget)
+	UWorld* World = GetWorld();
+	if (!World || !BoardRenderTarget)
 	{
 		return;
 	}
@@ -213,7 +270,7 @@ void ADNGBoardActor::DrawSegmentToBoard(const FDNGDrawSegment& Segment)
 	UCanvas* Canvas = nullptr;
 	FVector2D CanvasSize = FVector2D::ZeroVector;
 	FDrawToRenderTargetContext DrawContext;
-	UKismetRenderingLibrary::BeginDrawCanvasToRenderTarget(this, BoardRenderTarget, Canvas, CanvasSize, DrawContext);
+	UKismetRenderingLibrary::BeginDrawCanvasToRenderTarget(World, BoardRenderTarget, Canvas, CanvasSize, DrawContext);
 
 	if (Canvas)
 	{
@@ -232,7 +289,7 @@ void ADNGBoardActor::DrawSegmentToBoard(const FDNGDrawSegment& Segment)
 		}
 	}
 
-	UKismetRenderingLibrary::EndDrawCanvasToRenderTarget(this, DrawContext);
+	UKismetRenderingLibrary::EndDrawCanvasToRenderTarget(World, DrawContext);
 }
 
 FVector2D ADNGBoardActor::UVToPixel(const FVector2D& UV) const

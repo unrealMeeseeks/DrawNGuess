@@ -41,6 +41,12 @@ public:
 	UFUNCTION(BlueprintCallable)
 	FVector2D BoardPointToUV(const FVector2D& BoardPoint) const;
 
+	UFUNCTION(BlueprintCallable)
+	void RefreshBoardVisuals();
+
+	UFUNCTION(BlueprintCallable)
+	bool SaveBoardImage(FString& OutSavedPath);
+
 	void AddSegment(const FDNGDrawSegment& Segment);
 	void AddPredictedSegment(const FDNGDrawSegment& Segment);
 	void ClearBoard();

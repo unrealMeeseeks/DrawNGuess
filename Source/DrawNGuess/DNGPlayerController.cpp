@@ -18,6 +18,7 @@ ADNGPlayerController::ADNGPlayerController()
 	bEnableClickEvents = true;
 	bEnableMouseOverEvents = true;
 	PrimaryActorTick.bCanEverTick = true;
+	bAutoManageActiveCameraTarget = false;
 	MainMenuWidgetClass = UDNGMainMenuWidget::StaticClass();
 	MatchWidgetClass = UDNGMatchWidget::StaticClass();
 }
@@ -28,6 +29,9 @@ void ADNGPlayerController::BeginPlay()
 
 	RefreshWidgets();
 	ApplyInputMode();
+	SetIgnoreLookInput(true);
+	SetIgnoreMoveInput(true);
+	EnsureBoardViewTarget();
 }
 
 void ADNGPlayerController::Tick(float DeltaSeconds)
@@ -36,8 +40,11 @@ void ADNGPlayerController::Tick(float DeltaSeconds)
 
 	if (!IsLocalController() || !bPointerHeld || !CanUseDrawingControls())
 	{
+		EnsureBoardViewTarget();
 		return;
 	}
+
+	EnsureBoardViewTarget();
 
 	FVector2D BoardPoint;
 	if (!TryGetBoardPoint(BoardPoint))
@@ -98,6 +105,26 @@ void ADNGPlayerController::RequestNextRound()
 	if (CanAdvanceRound())
 	{
 		ServerNextRound();
+	}
+}
+
+void ADNGPlayerController::RequestSaveBoard()
+{
+	ADNGBoardActor* BoardActor = GetBoardActor();
+	if (!BoardActor)
+	{
+		SaveStatusMessage = TEXT("Save failed: board not found.");
+		return;
+	}
+
+	FString SavedPath;
+	if (BoardActor->SaveBoardImage(SavedPath))
+	{
+		SaveStatusMessage = FString::Printf(TEXT("Saved board to %s"), *SavedPath);
+	}
+	else
+	{
+		SaveStatusMessage = TEXT("Save failed.");
 	}
 }
 
@@ -356,6 +383,21 @@ void ADNGPlayerController::EmitDrawSegment(const FVector2D& Start, const FVector
 		}
 
 		ServerAddDrawSegment(Segment.Start, Segment.End, ActiveTool);
+	}
+}
+
+void ADNGPlayerController::EnsureBoardViewTarget()
+{
+	ADNGBoardActor* BoardActor = GetBoardActor();
+	if (!BoardActor)
+	{
+		return;
+	}
+
+	if (GetViewTarget() != BoardActor)
+	{
+		SetViewTarget(BoardActor);
+		BoardActor->RefreshBoardVisuals();
 	}
 }
 

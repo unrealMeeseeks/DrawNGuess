@@ -72,6 +72,7 @@ void UDNGMatchWidget::BuildWidgetTree()
 	PromptText = MakeMatchLabel(WidgetTree, TEXT("Prompt:"), 14);
 	ResultText = MakeMatchLabel(WidgetTree, TEXT("Result:"), 14);
 	InstructionText = MakeMatchLabel(WidgetTree, TEXT(""), 14);
+	SaveStatusText = MakeMatchLabel(WidgetTree, TEXT(""), 12);
 	GuessInput = WidgetTree->ConstructWidget<UEditableTextBox>(UEditableTextBox::StaticClass(), TEXT("GuessInput"));
 	GuessInput->SetHintText(FText::FromString(TEXT("Type your guess")));
 
@@ -80,6 +81,7 @@ void UDNGMatchWidget::BuildWidgetTree()
 	FinishButton = MakeMatchButton(WidgetTree, TEXT("Finish Drawing"));
 	SubmitButton = MakeMatchButton(WidgetTree, TEXT("Submit Guess"));
 	NextRoundButton = MakeMatchButton(WidgetTree, TEXT("Next Round"));
+	SaveButton = MakeMatchButton(WidgetTree, TEXT("Save Board"));
 
 	Content->AddChildToVerticalBox(PhaseText);
 	Content->AddChildToVerticalBox(RoleText);
@@ -92,6 +94,8 @@ void UDNGMatchWidget::BuildWidgetTree()
 	Content->AddChildToVerticalBox(GuessInput);
 	Content->AddChildToVerticalBox(SubmitButton);
 	Content->AddChildToVerticalBox(ResultText);
+	Content->AddChildToVerticalBox(SaveButton);
+	Content->AddChildToVerticalBox(SaveStatusText);
 	Content->AddChildToVerticalBox(NextRoundButton);
 
 	PencilButton->OnClicked.AddDynamic(this, &UDNGMatchWidget::HandlePencilClicked);
@@ -99,6 +103,7 @@ void UDNGMatchWidget::BuildWidgetTree()
 	FinishButton->OnClicked.AddDynamic(this, &UDNGMatchWidget::HandleFinishClicked);
 	SubmitButton->OnClicked.AddDynamic(this, &UDNGMatchWidget::HandleSubmitClicked);
 	NextRoundButton->OnClicked.AddDynamic(this, &UDNGMatchWidget::HandleNextRoundClicked);
+	SaveButton->OnClicked.AddDynamic(this, &UDNGMatchWidget::HandleSaveClicked);
 }
 
 void UDNGMatchWidget::RefreshFromController()
@@ -115,6 +120,7 @@ void UDNGMatchWidget::RefreshFromController()
 	PromptText->SetText(FText::FromString(Controller->GetPromptDescription()));
 	ResultText->SetText(FText::FromString(Controller->GetResultDescription()));
 	InstructionText->SetText(FText::FromString(Controller->GetInstructionDescription()));
+	SaveStatusText->SetText(FText::FromString(Controller->GetSaveStatusDescription()));
 
 	const bool bCanDraw = Controller->CanUseDrawingControls();
 	const bool bCanGuess = Controller->CanSubmitGuess();
@@ -126,6 +132,7 @@ void UDNGMatchWidget::RefreshFromController()
 	GuessInput->SetIsEnabled(bCanGuess);
 	SubmitButton->SetIsEnabled(bCanGuess);
 	NextRoundButton->SetIsEnabled(bCanAdvance);
+	SaveButton->SetIsEnabled(true);
 }
 
 void UDNGMatchWidget::HandlePencilClicked()
@@ -165,5 +172,13 @@ void UDNGMatchWidget::HandleNextRoundClicked()
 	if (ADNGPlayerController* Controller = GetOwningPlayer<ADNGPlayerController>())
 	{
 		Controller->RequestNextRound();
+	}
+}
+
+void UDNGMatchWidget::HandleSaveClicked()
+{
+	if (ADNGPlayerController* Controller = GetOwningPlayer<ADNGPlayerController>())
+	{
+		Controller->RequestSaveBoard();
 	}
 }

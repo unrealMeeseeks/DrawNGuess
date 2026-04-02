@@ -5,14 +5,14 @@
 #include "DNGGameState.h"
 #include "DNGPlayerController.h"
 #include "DNGPlayerState.h"
-#include "GameFramework/SpectatorPawn.h"
+#include "EngineUtils.h"
 
 ADNGGameMode::ADNGGameMode()
 {
 	GameStateClass = ADNGGameState::StaticClass();
 	PlayerControllerClass = ADNGPlayerController::StaticClass();
 	PlayerStateClass = ADNGPlayerState::StaticClass();
-	DefaultPawnClass = ASpectatorPawn::StaticClass();
+	DefaultPawnClass = nullptr;
 	BoardActorClass = ADNGBoardActor::StaticClass();
 }
 
@@ -146,10 +146,22 @@ void ADNGGameMode::EnsureBoardActor()
 		return;
 	}
 
-	FActorSpawnParameters SpawnParameters;
-	SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	UClass* ResolvedBoardActorClass = BoardActorClass ? BoardActorClass.Get() : ADNGBoardActor::StaticClass();
-	SpawnedBoardActor = GetWorld()->SpawnActor<ADNGBoardActor>(ResolvedBoardActorClass, FVector::ZeroVector, FRotator::ZeroRotator, SpawnParameters);
+	for (TActorIterator<ADNGBoardActor> It(GetWorld()); It; ++It)
+	{
+		if (ADNGBoardActor* ExistingBoardActor = *It)
+		{
+			SpawnedBoardActor = ExistingBoardActor;
+			break;
+		}
+	}
+
+	if (!SpawnedBoardActor)
+	{
+		FActorSpawnParameters SpawnParameters;
+		SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		UClass* ResolvedBoardActorClass = BoardActorClass ? BoardActorClass.Get() : ADNGBoardActor::StaticClass();
+		SpawnedBoardActor = GetWorld()->SpawnActor<ADNGBoardActor>(ResolvedBoardActorClass, FVector::ZeroVector, FRotator::ZeroRotator, SpawnParameters);
+	}
 
 	if (ADNGGameState* DNGGameState = GetGameState<ADNGGameState>())
 	{

@@ -36,6 +36,9 @@ private:
 	UFUNCTION()
 	void HandleNextRoundClicked();
 
+	UFUNCTION()
+	void HandleSaveClicked();
+
 	UPROPERTY()
 	TObjectPtr<UTextBlock> PhaseText = nullptr;
 
@@ -55,6 +58,9 @@ private:
 	TObjectPtr<UTextBlock> InstructionText = nullptr;
 
 	UPROPERTY()
+	TObjectPtr<UTextBlock> SaveStatusText = nullptr;
+
+	UPROPERTY()
 	TObjectPtr<UEditableTextBox> GuessInput = nullptr;
 
 	UPROPERTY()
@@ -71,4 +77,7 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UButton> NextRoundButton = nullptr;
+
+	UPROPERTY()
+	TObjectPtr<UButton> SaveButton = nullptr;
 };

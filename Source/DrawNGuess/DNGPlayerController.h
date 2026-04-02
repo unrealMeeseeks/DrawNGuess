@@ -36,6 +36,9 @@ public:
 	void RequestNextRound();
 
 	UFUNCTION(BlueprintCallable)
+	void RequestSaveBoard();
+
+	UFUNCTION(BlueprintCallable)
 	bool IsPainterLocal() const;
 
 	UFUNCTION(BlueprintCallable)
@@ -61,6 +64,9 @@ public:
 
 	UFUNCTION(BlueprintCallable)
 	FString GetInstructionDescription() const;
+
+	UFUNCTION(BlueprintCallable)
+	FString GetSaveStatusDescription() const { return SaveStatusMessage; }
 
 	UFUNCTION(BlueprintCallable)
 	EDNGDrawTool GetActiveTool() const { return ActiveTool; }
@@ -89,6 +95,7 @@ protected:
 
 private:
 	void EmitDrawSegment(const FVector2D& Start, const FVector2D& End);
+	void EnsureBoardViewTarget();
 	void RefreshWidgets();
 	void ApplyInputMode();
 	void HandleDrawPressed();
@@ -114,6 +121,9 @@ private:
 
 	UPROPERTY()
 	EDNGDrawTool ActiveTool = EDNGDrawTool::Pencil;
+
+	UPROPERTY()
+	FString SaveStatusMessage;
 
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UDNGMainMenuWidget> MainMenuWidgetClass;

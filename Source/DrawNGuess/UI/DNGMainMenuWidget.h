@@ -9,6 +9,7 @@ class UEditableTextBox;
 class UTextBlock;
 class UVerticalBox;
 
+// Fallback lobby widget implemented entirely in C++.
 UCLASS()
 class DRAWNGUESS_API UDNGMainMenuWidget : public UUserWidget
 {
@@ -18,8 +19,13 @@ public:
 	virtual void NativeOnInitialized() override;
 
 private:
+	// Builds the default widget tree when no Blueprint hierarchy is provided.
 	void BuildWidgetTree();
+
+	// Loads saved prompt values and join address into the inputs.
 	void LoadSavedValues();
+
+	// Saves the current input values back into the GameInstance.
 	void PersistInputs() const;
 
 	UFUNCTION()
@@ -31,6 +37,7 @@ private:
 	UFUNCTION()
 	void HandleSaveClicked();
 
+	// Prompt prefix input fields.
 	UPROPERTY()
 	TObjectPtr<UEditableTextBox> PositivePrefixInput = nullptr;
 
@@ -49,6 +56,7 @@ private:
 	UPROPERTY()
 	TObjectPtr<UButton> SaveButton = nullptr;
 
+	// Status line shown under the menu controls.
 	UPROPERTY()
 	TObjectPtr<UTextBlock> StatusText = nullptr;
 };

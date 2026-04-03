@@ -8,6 +8,7 @@ class UButton;
 class UEditableTextBox;
 class UTextBlock;
 
+// Fallback in-match HUD implemented entirely in C++.
 UCLASS()
 class DRAWNGUESS_API UDNGMatchWidget : public UUserWidget
 {
@@ -18,7 +19,10 @@ public:
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
 private:
+	// Builds the fallback widget tree when no Blueprint layout exists.
 	void BuildWidgetTree();
+
+	// Pulls current state from the owning player controller and updates the HUD.
 	void RefreshFromController();
 
 	UFUNCTION()
@@ -39,6 +43,7 @@ private:
 	UFUNCTION()
 	void HandleSaveClicked();
 
+	// Text widgets used by the fallback HUD.
 	UPROPERTY()
 	TObjectPtr<UTextBlock> PhaseText = nullptr;
 
@@ -63,6 +68,7 @@ private:
 	UPROPERTY()
 	TObjectPtr<UEditableTextBox> GuessInput = nullptr;
 
+	// Action buttons used by the fallback HUD.
 	UPROPERTY()
 	TObjectPtr<UButton> PencilButton = nullptr;
 

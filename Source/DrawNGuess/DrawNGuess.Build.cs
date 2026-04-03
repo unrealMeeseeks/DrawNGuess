@@ -2,22 +2,18 @@
 
 using UnrealBuildTool;
 
+// Central build configuration for the DrawNGuess runtime module.
 public class DrawNGuess : ModuleRules
 {
 	public DrawNGuess(ReadOnlyTargetRules Target) : base(Target)
 	{
+		// Use Unreal's standard shared or explicit PCH handling for this gameplay module.
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 	
+		// Public modules needed by gameplay code, UI, JSON parsing, and CLIP/NNE integration.
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "UMG", "ImageCore", "NNE", "Json" });
 
+		// Private UI dependencies used by the fallback C++ widgets.
 		PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
-
-		// Uncomment if you are using Slate UI
-		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
-		
-		// Uncomment if you are using online features
-		// PrivateDependencyModuleNames.Add("OnlineSubsystem");
-
-		// To include OnlineSubsystemSteam, add it to the plugins section in your uproject file with the Enabled attribute set to true
 	}
 }

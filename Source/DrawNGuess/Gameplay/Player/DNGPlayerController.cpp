@@ -1,17 +1,18 @@
 #include "DNGPlayerController.h"
 
-#include "DNGBoardActor.h"
-#include "DNGGameMode.h"
-#include "DNGGameState.h"
+#include "../Board/DNGBoardActor.h"
+#include "../Flow/DNGGameMode.h"
+#include "../Flow/DNGGameState.h"
 #include "DNGPlayerState.h"
-#include "UI/DNGMainMenuWidget.h"
-#include "UI/DNGMatchWidget.h"
+#include "../../UI/DNGMainMenuWidget.h"
+#include "../../UI/DNGMatchWidget.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/HitResult.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
 
+// Enables mouse-driven interaction and sets default fallback widget classes.
 ADNGPlayerController::ADNGPlayerController()
 {
 	bShowMouseCursor = true;
@@ -23,6 +24,7 @@ ADNGPlayerController::ADNGPlayerController()
 	MatchWidgetClass = UDNGMatchWidget::StaticClass();
 }
 
+// Creates the local widgets, applies the input mode, and locks the view to the board.
 void ADNGPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
@@ -34,6 +36,7 @@ void ADNGPlayerController::BeginPlay()
 	EnsureBoardViewTarget();
 }
 
+// Polls drawing input while the pointer is held and the local player can draw.
 void ADNGPlayerController::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
@@ -70,6 +73,7 @@ void ADNGPlayerController::Tick(float DeltaSeconds)
 	LastBoardPoint = BoardPoint;
 }
 
+// Registers the draw input action used by the prototype HUD.
 void ADNGPlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
@@ -79,11 +83,13 @@ void ADNGPlayerController::SetupInputComponent()
 	InputComponent->BindAction(TEXT("DrawPointer"), IE_Released, this, &ADNGPlayerController::HandleDrawReleased);
 }
 
+// Updates the locally selected tool.
 void ADNGPlayerController::RequestSetTool(EDNGDrawTool NewTool)
 {
 	ActiveTool = NewTool;
 }
 
+// Sends a finish request only when painter controls are currently valid.
 void ADNGPlayerController::RequestFinishDrawing()
 {
 	if (CanUseDrawingControls())
@@ -92,6 +98,7 @@ void ADNGPlayerController::RequestFinishDrawing()
 	}
 }
 
+// Sends a guess request only when the local player may currently guess.
 void ADNGPlayerController::RequestSubmitGuess(const FString& GuessText)
 {
 	if (CanSubmitGuess())
@@ -100,6 +107,7 @@ void ADNGPlayerController::RequestSubmitGuess(const FString& GuessText)
 	}
 }
 
+// Sends a next-round request only when the local player is allowed to advance.
 void ADNGPlayerController::RequestNextRound()
 {
 	if (CanAdvanceRound())
@@ -108,6 +116,7 @@ void ADNGPlayerController::RequestNextRound()
 	}
 }
 
+// Saves the current board image locally and updates the HUD status string.
 void ADNGPlayerController::RequestSaveBoard()
 {
 	ADNGBoardActor* BoardActor = GetBoardActor();
@@ -128,6 +137,7 @@ void ADNGPlayerController::RequestSaveBoard()
 	}
 }
 
+// Checks the replicated GameState to see whether this local player is the painter.
 bool ADNGPlayerController::IsPainterLocal() const
 {
 	if (const ADNGGameState* DNGGameState = GetDNGGameState())
@@ -138,6 +148,7 @@ bool ADNGPlayerController::IsPainterLocal() const
 	return false;
 }
 
+// Returns the current replicated phase, or Lobby before GameState is ready.
 EDNGMatchPhase ADNGPlayerController::GetCurrentPhase() const
 {
 	if (const ADNGGameState* DNGGameState = GetDNGGameState())
@@ -148,6 +159,7 @@ EDNGMatchPhase ADNGPlayerController::GetCurrentPhase() const
 	return EDNGMatchPhase::Lobby;
 }
 
+// Returns a short UI label for the current phase.
 FString ADNGPlayerController::GetPhaseDescription() const
 {
 	switch (GetCurrentPhase())
@@ -165,11 +177,13 @@ FString ADNGPlayerController::GetPhaseDescription() const
 	}
 }
 
+// Returns a short UI label for the local player's role.
 FString ADNGPlayerController::GetRoleDescription() const
 {
 	return IsPainterLocal() ? TEXT("Role: Painter") : TEXT("Role: Guesser");
 }
 
+// Builds the score summary shown in the fallback HUD.
 FString ADNGPlayerController::GetScoreDescription() const
 {
 	FString Description = TEXT("Score: ");
@@ -194,6 +208,7 @@ FString ADNGPlayerController::GetScoreDescription() const
 	return Description;
 }
 
+// Returns the currently replicated prompt settings as readable text.
 FString ADNGPlayerController::GetPromptDescription() const
 {
 	if (const ADNGGameState* DNGGameState = GetDNGGameState())
@@ -205,6 +220,7 @@ FString ADNGPlayerController::GetPromptDescription() const
 	return TEXT("Prompt settings not ready");
 }
 
+// Builds the detailed result summary shown after scoring.
 FString ADNGPlayerController::GetResultDescription() const
 {
 	if (const ADNGGameState* DNGGameState = GetDNGGameState())
@@ -234,6 +250,7 @@ FString ADNGPlayerController::GetResultDescription() const
 	return TEXT("No result yet");
 }
 
+// Returns context-sensitive instructions for the local player.
 FString ADNGPlayerController::GetInstructionDescription() const
 {
 	switch (GetCurrentPhase())
@@ -255,21 +272,25 @@ FString ADNGPlayerController::GetInstructionDescription() const
 	}
 }
 
+// Drawing is only allowed for the local painter during the drawing phase.
 bool ADNGPlayerController::CanUseDrawingControls() const
 {
 	return IsPainterLocal() && GetCurrentPhase() == EDNGMatchPhase::Drawing;
 }
 
+// Guessing is only allowed during the guessing phase for non-painters.
 bool ADNGPlayerController::CanSubmitGuess() const
 {
 	return !IsPainterLocal() && GetCurrentPhase() == EDNGMatchPhase::Guessing;
 }
 
+// Advancing is currently restricted to the listen-server host on the result screen.
 bool ADNGPlayerController::CanAdvanceRound() const
 {
 	return HasAuthority() && GetCurrentPhase() == EDNGMatchPhase::Results;
 }
 
+// Forwards one locally generated segment to the authoritative GameMode.
 void ADNGPlayerController::ServerAddDrawSegment_Implementation(const FVector2D& Start, const FVector2D& End, EDNGDrawTool Tool)
 {
 	if (ADNGGameMode* DNGGameMode = Cast<ADNGGameMode>(GetWorld()->GetAuthGameMode()))
@@ -278,6 +299,7 @@ void ADNGPlayerController::ServerAddDrawSegment_Implementation(const FVector2D& 
 	}
 }
 
+// Forwards the finish-drawing request to the authoritative GameMode.
 void ADNGPlayerController::ServerFinishDrawing_Implementation()
 {
 	if (ADNGGameMode* DNGGameMode = Cast<ADNGGameMode>(GetWorld()->GetAuthGameMode()))
@@ -286,6 +308,7 @@ void ADNGPlayerController::ServerFinishDrawing_Implementation()
 	}
 }
 
+// Forwards a guess submission to the authoritative GameMode.
 void ADNGPlayerController::ServerSubmitGuess_Implementation(const FString& GuessText)
 {
 	if (ADNGGameMode* DNGGameMode = Cast<ADNGGameMode>(GetWorld()->GetAuthGameMode()))
@@ -294,6 +317,7 @@ void ADNGPlayerController::ServerSubmitGuess_Implementation(const FString& Guess
 	}
 }
 
+// Forwards the next-round request to the authoritative GameMode.
 void ADNGPlayerController::ServerNextRound_Implementation()
 {
 	if (ADNGGameMode* DNGGameMode = Cast<ADNGGameMode>(GetWorld()->GetAuthGameMode()))
@@ -302,6 +326,7 @@ void ADNGPlayerController::ServerNextRound_Implementation()
 	}
 }
 
+// Ensures the correct fallback widget exists for the current phase.
 void ADNGPlayerController::RefreshWidgets()
 {
 	if (!IsLocalController())
@@ -348,6 +373,7 @@ void ADNGPlayerController::RefreshWidgets()
 	}
 }
 
+// Switches between menu-focused and gameplay-focused mouse input modes.
 void ADNGPlayerController::ApplyInputMode()
 {
 	if (!IsLocalController())
@@ -367,6 +393,7 @@ void ADNGPlayerController::ApplyInputMode()
 	bShowMouseCursor = true;
 }
 
+// Draws locally for prediction and sends subdivided segments to the server.
 void ADNGPlayerController::EmitDrawSegment(const FVector2D& Start, const FVector2D& End)
 {
 	const float Distance = FVector2D::Distance(Start, End);
@@ -392,6 +419,7 @@ void ADNGPlayerController::EmitDrawSegment(const FVector2D& Start, const FVector
 	}
 }
 
+// Keeps the controller camera locked to the board actor's orthographic camera.
 void ADNGPlayerController::EnsureBoardViewTarget()
 {
 	ADNGBoardActor* BoardActor = GetBoardActor();
@@ -407,18 +435,21 @@ void ADNGPlayerController::EnsureBoardViewTarget()
 	}
 }
 
+// Starts pointer capture for drawing.
 void ADNGPlayerController::HandleDrawPressed()
 {
 	bPointerHeld = true;
 	bHasLastBoardPoint = false;
 }
 
+// Stops pointer capture and resets stroke continuity.
 void ADNGPlayerController::HandleDrawReleased()
 {
 	bPointerHeld = false;
 	bHasLastBoardPoint = false;
 }
 
+// Converts the cursor position into normalized board UV coordinates using hit UV lookup.
 bool ADNGPlayerController::TryGetBoardPoint(FVector2D& OutBoardPoint) const
 {
 	ADNGBoardActor* BoardActor = GetBoardActor();
@@ -463,11 +494,13 @@ bool ADNGPlayerController::TryGetBoardPoint(FVector2D& OutBoardPoint) const
 	return true;
 }
 
+// Typed helper for accessing the replicated GameState.
 ADNGGameState* ADNGPlayerController::GetDNGGameState() const
 {
 	return GetWorld() ? GetWorld()->GetGameState<ADNGGameState>() : nullptr;
 }
 
+// Typed helper for accessing the shared board actor.
 ADNGBoardActor* ADNGPlayerController::GetBoardActor() const
 {
 	if (const ADNGGameState* DNGGameState = GetDNGGameState())

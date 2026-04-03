@@ -1,6 +1,6 @@
 #include "DNGMainMenuWidget.h"
 
-#include "../DNGGameInstance.h"
+#include "../Gameplay/Flow/DNGGameInstance.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/Button.h"
@@ -35,6 +35,7 @@ namespace
 	}
 }
 
+// Binds the fallback widget setup and loads locally cached values into the text boxes.
 void UDNGMainMenuWidget::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
@@ -46,6 +47,7 @@ void UDNGMainMenuWidget::NativeOnInitialized()
 	}
 }
 
+// Builds a minimal menu entirely in C++ when no Blueprint layout exists.
 void UDNGMainMenuWidget::BuildWidgetTree()
 {
 	UCanvasPanel* Root = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("Root"));
@@ -104,6 +106,7 @@ void UDNGMainMenuWidget::BuildWidgetTree()
 	}
 }
 
+// Restores saved prompt values and join address from the local GameInstance.
 void UDNGMainMenuWidget::LoadSavedValues()
 {
 	if (const UDNGGameInstance* GameInstance = Cast<UDNGGameInstance>(GetGameInstance()))
@@ -115,6 +118,7 @@ void UDNGMainMenuWidget::LoadSavedValues()
 	}
 }
 
+// Pushes the current text box values back into the GameInstance save flow.
 void UDNGMainMenuWidget::PersistInputs() const
 {
 	if (UDNGGameInstance* GameInstance = Cast<UDNGGameInstance>(GetGameInstance()))
@@ -126,6 +130,7 @@ void UDNGMainMenuWidget::PersistInputs() const
 	}
 }
 
+// Saves current values and starts a listen server.
 void UDNGMainMenuWidget::HandleHostClicked()
 {
 	PersistInputs();
@@ -141,6 +146,7 @@ void UDNGMainMenuWidget::HandleHostClicked()
 	}
 }
 
+// Saves current values and joins the typed server address.
 void UDNGMainMenuWidget::HandleJoinClicked()
 {
 	PersistInputs();
@@ -156,6 +162,7 @@ void UDNGMainMenuWidget::HandleJoinClicked()
 	}
 }
 
+// Saves current values without changing maps.
 void UDNGMainMenuWidget::HandleSaveClicked()
 {
 	PersistInputs();

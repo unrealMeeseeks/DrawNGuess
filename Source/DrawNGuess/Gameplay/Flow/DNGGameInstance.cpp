@@ -1,21 +1,24 @@
 #include "DNGGameInstance.h"
 
-#include "DNGPromptSettingsSave.h"
+#include "../../SaveSystem/DNGPromptSettingsSave.h"
 #include "Engine/Engine.h"
 #include "Engine/LocalPlayer.h"
 #include "Kismet/GameplayStatics.h"
 
+// Loads locally persisted prompt settings as soon as the game instance is created.
 void UDNGGameInstance::Init()
 {
 	Super::Init();
 	LoadPromptSettings();
 }
 
+// Returns the cached local prompt settings without touching disk.
 const FDNGPromptSettings& UDNGGameInstance::GetPromptSettings() const
 {
 	return PromptSettings;
 }
 
+// Updates the in-memory prompt settings and persists them immediately.
 void UDNGGameInstance::UpdatePromptSettings(const FString& InPositivePrefix, const FString& InNegativePrefix, const FString& InJoinAddress)
 {
 	PromptSettings.PositivePrefix = InPositivePrefix.IsEmpty() ? FDNGPromptSettings().PositivePrefix : InPositivePrefix;
@@ -24,6 +27,7 @@ void UDNGGameInstance::UpdatePromptSettings(const FString& InPositivePrefix, con
 	SavePromptSettings();
 }
 
+// Starts a listen server on the currently active map.
 void UDNGGameInstance::HostGame()
 {
 	SavePromptSettings();
@@ -34,6 +38,7 @@ void UDNGGameInstance::HostGame()
 	}
 }
 
+// Connects the local player to a remote host and remembers the entered address.
 void UDNGGameInstance::JoinGame(const FString& ServerAddress)
 {
 	const FString TargetAddress = ServerAddress.IsEmpty() ? PromptSettings.LastJoinAddress : ServerAddress;
@@ -49,6 +54,7 @@ void UDNGGameInstance::JoinGame(const FString& ServerAddress)
 	}
 }
 
+// Restores prompt settings from the dedicated SaveGame slot if it exists.
 void UDNGGameInstance::LoadPromptSettings()
 {
 	if (UGameplayStatics::DoesSaveGameExist(SaveSlotName, 0))
@@ -63,6 +69,7 @@ void UDNGGameInstance::LoadPromptSettings()
 	PromptSettings = FDNGPromptSettings();
 }
 
+// Writes the current prompt settings to the SaveGame slot.
 void UDNGGameInstance::SavePromptSettings() const
 {
 	UDNGPromptSettingsSave* Save = Cast<UDNGPromptSettingsSave>(UGameplayStatics::CreateSaveGameObject(UDNGPromptSettingsSave::StaticClass()));
@@ -75,6 +82,7 @@ void UDNGGameInstance::SavePromptSettings() const
 	UGameplayStatics::SaveGameToSlot(Save, SaveSlotName, 0);
 }
 
+// Uses the current level name so hosting works from whichever gameplay map is loaded.
 FString UDNGGameInstance::ResolveStartupMapName() const
 {
 	if (const UWorld* World = GetWorld())

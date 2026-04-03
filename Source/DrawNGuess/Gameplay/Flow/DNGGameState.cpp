@@ -1,14 +1,16 @@
 #include "DNGGameState.h"
 
-#include "DNGBoardActor.h"
-#include "DNGPlayerState.h"
+#include "../Board/DNGBoardActor.h"
+#include "../Player/DNGPlayerState.h"
 #include "Net/UnrealNetwork.h"
 
+// GameState exists on server and clients, so it only stores replicated state.
 ADNGGameState::ADNGGameState()
 {
 	bReplicates = true;
 }
 
+// Registers all fields consumed by player controllers and widgets.
 void ADNGGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
@@ -21,11 +23,13 @@ void ADNGGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(ADNGGameState, LastRoundResult);
 }
 
+// Returns whether the supplied player is the currently assigned painter.
 bool ADNGGameState::IsPainter(const APlayerState* PlayerState) const
 {
 	return PlayerState != nullptr && PlayerState == PainterPlayerState;
 }
 
+// The setters below intentionally remain simple because GameMode is authoritative.
 void ADNGGameState::SetMatchPhase(EDNGMatchPhase InPhase)
 {
 	MatchPhase = InPhase;

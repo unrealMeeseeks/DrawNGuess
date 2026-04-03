@@ -8,6 +8,7 @@
 
 namespace
 {
+	// CLIP text encoder constants and helpers used by the native tokenizer implementation.
 	constexpr int32 GClipContextLength = 77;
 	const TCHAR* GBosToken = TEXT("<|startoftext|>");
 	const TCHAR* GEosToken = TEXT("<|endoftext|>");
@@ -20,6 +21,7 @@ namespace
 	}
 }
 
+// Loads tokenizer assets from disk and prepares all lookup tables required for encoding.
 bool FDNGClipTokenizer::Initialize(const FString& InTokenizerDirectory, FString& OutError)
 {
 	TokenizerDirectory = InTokenizerDirectory;
@@ -69,6 +71,7 @@ bool FDNGClipTokenizer::Initialize(const FString& InTokenizerDirectory, FString&
 	return true;
 }
 
+// Encodes one prompt into the fixed-size token id and attention mask tensors expected by CLIP.
 bool FDNGClipTokenizer::Encode(const FString& Text, TArray<int64>& OutInputIds, TArray<int64>& OutAttentionMask, FString& OutError) const
 {
 	OutInputIds.Reset();
@@ -139,6 +142,7 @@ bool FDNGClipTokenizer::Encode(const FString& Text, TArray<int64>& OutInputIds, 
 	return true;
 }
 
+// Loads the vocabulary file that maps token strings to integer ids.
 bool FDNGClipTokenizer::LoadVocabulary(const FString& VocabPath, FString& OutError)
 {
 	FString VocabJson;
@@ -165,6 +169,7 @@ bool FDNGClipTokenizer::LoadVocabulary(const FString& VocabPath, FString& OutErr
 	return Vocabulary.Num() > 0;
 }
 
+// Loads the ordered merge rules used by byte-pair encoding.
 bool FDNGClipTokenizer::LoadMerges(const FString& MergesPath, FString& OutError)
 {
 	TArray<FString> Lines;
@@ -196,6 +201,7 @@ bool FDNGClipTokenizer::LoadMerges(const FString& MergesPath, FString& OutError)
 	return MergeRanks.Num() > 0;
 }
 
+// Builds the reversible byte-to-unicode mapping used by GPT/CLIP tokenizers.
 void FDNGClipTokenizer::BuildByteEncoder()
 {
 	TArray<int32> ByteValues;
@@ -229,6 +235,7 @@ void FDNGClipTokenizer::BuildByteEncoder()
 	}
 }
 
+// Performs a CLIP-friendly token split before byte encoding and BPE.
 TArray<FString> FDNGClipTokenizer::RegexLikeSplit(const FString& Text) const
 {
 	TArray<FString> Tokens;
@@ -291,6 +298,7 @@ TArray<FString> FDNGClipTokenizer::RegexLikeSplit(const FString& Text) const
 	return Tokens;
 }
 
+// Normalizes case and whitespace so tokenization matches the exported model's expectations.
 FString FDNGClipTokenizer::NormalizeInputText(const FString& Text) const
 {
 	FString Lower = Text.ToLower();
@@ -320,6 +328,7 @@ FString FDNGClipTokenizer::NormalizeInputText(const FString& Text) const
 	return Result;
 }
 
+// Converts raw token bytes into the tokenizer's unicode-safe intermediate form.
 FString FDNGClipTokenizer::EncodeBytesToUnicode(const FString& Token) const
 {
 	FTCHARToUTF8 Utf8(*Token);
@@ -337,6 +346,7 @@ FString FDNGClipTokenizer::EncodeBytesToUnicode(const FString& Token) const
 	return Result;
 }
 
+// Applies merge rules until the encoded token reaches its final BPE form.
 FString FDNGClipTokenizer::ApplyBPE(const FString& Token) const
 {
 	if (const FString* Cached = BpeCache.Find(Token))
@@ -412,6 +422,7 @@ FString FDNGClipTokenizer::ApplyBPE(const FString& Token) const
 	return Result;
 }
 
+// Splits the encoded token into its smallest mergeable symbol units.
 TArray<FString> FDNGClipTokenizer::SplitIntoSymbols(const FString& EncodedToken) const
 {
 	TArray<FString> Symbols;
@@ -423,6 +434,7 @@ TArray<FString> FDNGClipTokenizer::SplitIntoSymbols(const FString& EncodedToken)
 	return Symbols;
 }
 
+// Collects adjacent symbol pairs so the next merge candidate can be selected.
 TSet<TPair<FString, FString>> FDNGClipTokenizer::GetPairs(const TArray<FString>& Symbols)
 {
 	TSet<TPair<FString, FString>> Result;
@@ -439,6 +451,7 @@ TSet<TPair<FString, FString>> FDNGClipTokenizer::GetPairs(const TArray<FString>&
 	return Result;
 }
 
+// Builds a stable key for merge-rank lookups.
 FString FDNGClipTokenizer::MakePairKey(const FString& Left, const FString& Right)
 {
 	return Left + TEXT(" ") + Right;

@@ -1,13 +1,14 @@
 #include "DNGGameMode.h"
 
-#include "DNGBoardActor.h"
-#include "DNGClipScorer.h"
+#include "../../AI/CLIP/DNGClipScorer.h"
+#include "../Board/DNGBoardActor.h"
 #include "DNGGameInstance.h"
 #include "DNGGameState.h"
-#include "DNGPlayerController.h"
-#include "DNGPlayerState.h"
+#include "../Player/DNGPlayerController.h"
+#include "../Player/DNGPlayerState.h"
 #include "EngineUtils.h"
 
+// Sets the authoritative gameplay classes used by the prototype.
 ADNGGameMode::ADNGGameMode()
 {
 	GameStateClass = ADNGGameState::StaticClass();
@@ -17,6 +18,7 @@ ADNGGameMode::ADNGGameMode()
 	BoardActorClass = ADNGBoardActor::StaticClass();
 }
 
+// Initializes the board, scoring backend, replicated settings, and initial round state.
 void ADNGGameMode::BeginPlay()
 {
 	Super::BeginPlay();
@@ -29,6 +31,7 @@ void ADNGGameMode::BeginPlay()
 	TryStartRound();
 }
 
+// Re-checks round startup conditions whenever a player joins.
 void ADNGGameMode::PostLogin(APlayerController* NewPlayer)
 {
 	Super::PostLogin(NewPlayer);
@@ -37,6 +40,7 @@ void ADNGGameMode::PostLogin(APlayerController* NewPlayer)
 	TryStartRound();
 }
 
+// Returns the match to a clean lobby state whenever a player leaves.
 void ADNGGameMode::Logout(AController* Exiting)
 {
 	Super::Logout(Exiting);
@@ -50,6 +54,7 @@ void ADNGGameMode::Logout(AController* Exiting)
 	TryStartRound();
 }
 
+// Validates painter-only drawing input and appends it to the shared board.
 void ADNGGameMode::HandleDrawSegment(ADNGPlayerController* RequestingController, const FVector2D& Start, const FVector2D& End, EDNGDrawTool Tool)
 {
 	ADNGGameState* DNGGameState = GetGameState<ADNGGameState>();
@@ -72,6 +77,7 @@ void ADNGGameMode::HandleDrawSegment(ADNGPlayerController* RequestingController,
 	SpawnedBoardActor->AddSegment(Segment);
 }
 
+// Transitions from drawing to guessing when the active painter finishes.
 void ADNGGameMode::HandleFinishDrawing(ADNGPlayerController* RequestingController)
 {
 	ADNGGameState* DNGGameState = GetGameState<ADNGGameState>();
@@ -89,6 +95,7 @@ void ADNGGameMode::HandleFinishDrawing(ADNGPlayerController* RequestingControlle
 	DNGGameState->SetMatchPhase(EDNGMatchPhase::Guessing);
 }
 
+// Scores the submitted guess and publishes the round result.
 void ADNGGameMode::HandleSubmitGuess(ADNGPlayerController* RequestingController, const FString& GuessText)
 {
 	ADNGGameState* DNGGameState = GetGameState<ADNGGameState>();
@@ -120,6 +127,7 @@ void ADNGGameMode::HandleSubmitGuess(ADNGPlayerController* RequestingController,
 	DNGGameState->SetMatchPhase(EDNGMatchPhase::Results);
 }
 
+// Starts a new round only when the request is valid for the current result phase.
 void ADNGGameMode::HandleNextRound(ADNGPlayerController* RequestingController)
 {
 	if (!RequestingController || !RequestingController->HasAuthority())
@@ -136,6 +144,7 @@ void ADNGGameMode::HandleNextRound(ADNGPlayerController* RequestingController)
 	TryStartRound();
 }
 
+// Reuses a placed board actor when available, otherwise spawns a fallback board.
 void ADNGGameMode::EnsureBoardActor()
 {
 	if (SpawnedBoardActor)
@@ -166,6 +175,7 @@ void ADNGGameMode::EnsureBoardActor()
 	}
 }
 
+// Builds and initializes the CLIP scorer only when the feature is enabled.
 void ADNGGameMode::InitializeClipScorer()
 {
 	if (ClipScorer)
@@ -180,6 +190,7 @@ void ADNGGameMode::InitializeClipScorer()
 	}
 }
 
+// Copies host-owned prompt settings into the replicated GameState payload.
 void ADNGGameMode::ApplyPromptSettings()
 {
 	ADNGGameState* DNGGameState = GetGameState<ADNGGameState>();
@@ -192,6 +203,7 @@ void ADNGGameMode::ApplyPromptSettings()
 	DNGGameState->SetPromptSettings(DNGGameInstance->GetPromptSettings());
 }
 
+// Starts a round once enough players are connected and the lobby is ready.
 void ADNGGameMode::TryStartRound()
 {
 	if (const ADNGGameState* DNGGameState = GetGameState<ADNGGameState>())
@@ -212,6 +224,7 @@ void ADNGGameMode::TryStartRound()
 	StartRound();
 }
 
+// Performs the full per-round reset, painter assignment, and state replication.
 void ADNGGameMode::StartRound()
 {
 	ADNGGameState* DNGGameState = GetGameState<ADNGGameState>();
@@ -249,6 +262,7 @@ void ADNGGameMode::StartRound()
 	DNGGameState->SetMatchPhase(EDNGMatchPhase::Drawing);
 }
 
+// Resets the shared match state to its lobby defaults.
 void ADNGGameMode::EnterLobby()
 {
 	if (ADNGGameState* DNGGameState = GetGameState<ADNGGameState>())
@@ -267,6 +281,7 @@ void ADNGGameMode::EnterLobby()
 	}
 }
 
+// Re-locks every connected player controller to the board camera.
 void ADNGGameMode::RefreshBoardViewTargets() const
 {
 	if (!SpawnedBoardActor)
@@ -284,6 +299,7 @@ void ADNGGameMode::RefreshBoardViewTargets() const
 	}
 }
 
+// Produces a deterministic player order so painter rotation stays stable.
 TArray<ADNGPlayerState*> ADNGGameMode::GetOrderedPlayers() const
 {
 	TArray<ADNGPlayerState*> Result;
@@ -306,6 +322,7 @@ TArray<ADNGPlayerState*> ADNGGameMode::GetOrderedPlayers() const
 	return Result;
 }
 
+// Chooses the painter by rotating through the ordered player list.
 ADNGPlayerState* ADNGGameMode::ResolvePainterForRound(const TArray<ADNGPlayerState*>& Players) const
 {
 	if (Players.Num() == 0)
@@ -318,8 +335,10 @@ ADNGPlayerState* ADNGGameMode::ResolvePainterForRound(const TArray<ADNGPlayerSta
 	return Players[RoundIndex % Players.Num()];
 }
 
+// Produces a stable mock result so gameplay remains testable without CLIP.
 FDNGRoundResult ADNGGameMode::BuildFallbackRoundResult(const FString& GuessText, const FDNGPromptSettings& PromptSettings) const
 {
+	// The fallback path is seeded deterministically so repeated tests stay stable.
 	const ADNGGameState* DNGGameState = GetGameState<ADNGGameState>();
 	const int32 Seed = GetTypeHash(GuessText) ^ ((DNGGameState ? DNGGameState->GetRoundNumber() : 0) * 7919);
 	FRandomStream Stream(Seed);
@@ -337,6 +356,7 @@ FDNGRoundResult ADNGGameMode::BuildFallbackRoundResult(const FString& GuessText,
 	return Result;
 }
 
+// Converts raw cosine scores into a two-class softmax probability pair.
 void ADNGGameMode::ApplySoftmaxProbabilities(FDNGRoundResult& InOutResult, float LogitScale) const
 {
 	const double PositiveLogit = static_cast<double>(InOutResult.PositiveScore) * static_cast<double>(LogitScale);
@@ -358,6 +378,7 @@ void ADNGGameMode::ApplySoftmaxProbabilities(FDNGRoundResult& InOutResult, float
 	InOutResult.NegativeProbability = static_cast<float>(NegativeExp / SumExp);
 }
 
+// Exports the authoritative board image and asks CLIP to score both prompts.
 bool ADNGGameMode::TryPopulateClipRoundResult(FDNGRoundResult& InOutResult)
 {
 	if (!ClipScorer || !SpawnedBoardActor)

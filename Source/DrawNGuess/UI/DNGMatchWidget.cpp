@@ -1,6 +1,6 @@
 #include "DNGMatchWidget.h"
 
-#include "../DNGPlayerController.h"
+#include "../Gameplay/Player/DNGPlayerController.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/Button.h"
@@ -33,6 +33,7 @@ namespace
 	}
 }
 
+// Binds button handlers and creates the fallback HUD when no Blueprint tree exists.
 void UDNGMatchWidget::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
@@ -43,12 +44,14 @@ void UDNGMatchWidget::NativeOnInitialized()
 	}
 }
 
+// Polls the owning controller each frame so the HUD always reflects replicated state.
 void UDNGMatchWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
 	RefreshFromController();
 }
 
+// Builds the prototype HUD entirely in C++ for projects that do not yet use Blueprint UI.
 void UDNGMatchWidget::BuildWidgetTree()
 {
 	UCanvasPanel* Root = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("Root"));
@@ -106,6 +109,7 @@ void UDNGMatchWidget::BuildWidgetTree()
 	SaveButton->OnClicked.AddDynamic(this, &UDNGMatchWidget::HandleSaveClicked);
 }
 
+// Refreshes text and button states from the owning player controller.
 void UDNGMatchWidget::RefreshFromController()
 {
 	ADNGPlayerController* Controller = GetOwningPlayer<ADNGPlayerController>();
@@ -135,6 +139,7 @@ void UDNGMatchWidget::RefreshFromController()
 	SaveButton->SetIsEnabled(true);
 }
 
+// Switches to the pencil tool.
 void UDNGMatchWidget::HandlePencilClicked()
 {
 	if (ADNGPlayerController* Controller = GetOwningPlayer<ADNGPlayerController>())
@@ -143,6 +148,7 @@ void UDNGMatchWidget::HandlePencilClicked()
 	}
 }
 
+// Switches to the eraser tool.
 void UDNGMatchWidget::HandleEraserClicked()
 {
 	if (ADNGPlayerController* Controller = GetOwningPlayer<ADNGPlayerController>())
@@ -151,6 +157,7 @@ void UDNGMatchWidget::HandleEraserClicked()
 	}
 }
 
+// Requests the end of the drawing phase.
 void UDNGMatchWidget::HandleFinishClicked()
 {
 	if (ADNGPlayerController* Controller = GetOwningPlayer<ADNGPlayerController>())
@@ -159,6 +166,7 @@ void UDNGMatchWidget::HandleFinishClicked()
 	}
 }
 
+// Requests submission of the current guess text.
 void UDNGMatchWidget::HandleSubmitClicked()
 {
 	if (ADNGPlayerController* Controller = GetOwningPlayer<ADNGPlayerController>())
@@ -167,6 +175,7 @@ void UDNGMatchWidget::HandleSubmitClicked()
 	}
 }
 
+// Requests that the next round begins.
 void UDNGMatchWidget::HandleNextRoundClicked()
 {
 	if (ADNGPlayerController* Controller = GetOwningPlayer<ADNGPlayerController>())
@@ -175,6 +184,7 @@ void UDNGMatchWidget::HandleNextRoundClicked()
 	}
 }
 
+// Saves the current board image locally.
 void UDNGMatchWidget::HandleSaveClicked()
 {
 	if (ADNGPlayerController* Controller = GetOwningPlayer<ADNGPlayerController>())

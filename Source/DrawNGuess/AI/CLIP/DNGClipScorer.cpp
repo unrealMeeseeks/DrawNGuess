@@ -8,6 +8,7 @@
 
 namespace
 {
+	// CLIP ViT-B/32 preprocessing constants mirrored from the source model config.
 	constexpr int32 GClipImageSize = 224;
 	constexpr int32 GClipEmbeddingFallbackSize = 512;
 	constexpr int32 GClipContextLength = 77;
@@ -15,6 +16,7 @@ namespace
 	constexpr float GClipStd[3] = { 0.26862954f, 0.26130258f, 0.27577711f };
 }
 
+// Resets runtime/model state so the scorer can be safely reconfigured at runtime.
 void UDNGClipScorer::Configure(const FString& InRuntimeName, TSoftObjectPtr<UNNEModelData> InImageEncoderModel, TSoftObjectPtr<UNNEModelData> InTextEncoderModel, const FString& InTokenizerDirectory)
 {
 	RuntimeName = InRuntimeName.IsEmpty() ? TEXT("NNERuntimeORTCpu") : InRuntimeName;
@@ -31,6 +33,7 @@ void UDNGClipScorer::Configure(const FString& InRuntimeName, TSoftObjectPtr<UNNE
 	Tokenizer = FDNGClipTokenizer();
 }
 
+// Initializes the tokenizer first, then lazily proves that both model branches can be created.
 bool UDNGClipScorer::Initialize(FString& OutError)
 {
 	if (!EnsureImageModel(OutError))
@@ -49,6 +52,7 @@ bool UDNGClipScorer::Initialize(FString& OutError)
 	return true;
 }
 
+// Convenience entry point used when only image encoding needs to be verified.
 bool UDNGClipScorer::EncodeImageFile(const FString& ImagePath, TArray<float>& OutEmbedding, FString& OutError)
 {
 	OutEmbedding.Reset();
@@ -67,6 +71,7 @@ bool UDNGClipScorer::EncodeImageFile(const FString& ImagePath, TArray<float>& Ou
 	return RunImageModel(InputTensor, OutEmbedding, OutError);
 }
 
+// Full image-vs-text scoring path used by the authoritative GameMode.
 bool UDNGClipScorer::ScoreImageAgainstText(const FString& ImagePath, const FString& Text, float& OutScore, FString& OutError)
 {
 	OutScore = 0.0f;
@@ -87,6 +92,7 @@ bool UDNGClipScorer::ScoreImageAgainstText(const FString& ImagePath, const FStri
 	return true;
 }
 
+// Computes cosine similarity while guarding against zero-length vectors.
 float UDNGClipScorer::CosineSimilarity(TConstArrayView<float> Left, TConstArrayView<float> Right)
 {
 	if (Left.Num() == 0 || Left.Num() != Right.Num())
@@ -112,6 +118,7 @@ float UDNGClipScorer::CosineSimilarity(TConstArrayView<float> Left, TConstArrayV
 	return static_cast<float>(Dot / FMath::Sqrt(LeftNorm * RightNorm));
 }
 
+// Loads the image encoder asset and creates a CPU model instance on first use.
 bool UDNGClipScorer::EnsureImageModel(FString& OutError)
 {
 	if (bImageModelInitialized && ImageInstance.IsValid())
@@ -174,6 +181,7 @@ bool UDNGClipScorer::EnsureImageModel(FString& OutError)
 	return true;
 }
 
+// Loads the text encoder asset and creates a CPU model instance on first use.
 bool UDNGClipScorer::EnsureTextModel(FString& OutError)
 {
 	if (bTextModelInitialized && TextInstance.IsValid())
@@ -245,6 +253,7 @@ bool UDNGClipScorer::EnsureTextModel(FString& OutError)
 	return true;
 }
 
+// Reads a saved PNG, resizes it to CLIP resolution, and applies mean/std normalization.
 bool UDNGClipScorer::BuildImageTensor(const FString& ImagePath, TArray<float>& OutTensor, FString& OutError) const
 {
 	OutTensor.Reset();
@@ -301,6 +310,7 @@ bool UDNGClipScorer::BuildImageTensor(const FString& ImagePath, TArray<float>& O
 	return true;
 }
 
+// Runs the image encoder synchronously through the configured NNE runtime.
 bool UDNGClipScorer::RunImageModel(const TArray<float>& InputTensor, TArray<float>& OutEmbedding, FString& OutError)
 {
 	if (!ImageInstance.IsValid())
@@ -334,11 +344,13 @@ bool UDNGClipScorer::RunImageModel(const TArray<float>& InputTensor, TArray<floa
 	return true;
 }
 
+// Delegates text preprocessing to the native CLIP tokenizer implementation.
 bool UDNGClipScorer::TokenizeText(const FString& Text, TArray<int64>& OutInputIds, TArray<int64>& OutAttentionMask, FString& OutError) const
 {
 	return Tokenizer.Encode(Text, OutInputIds, OutAttentionMask, OutError);
 }
 
+// Runs the exported text model and pools the EOS token embedding expected by CLIP.
 bool UDNGClipScorer::RunTextModel(const FString& Text, TArray<float>& OutEmbedding, FString& OutError)
 {
 	OutEmbedding.Reset();
@@ -405,6 +417,7 @@ bool UDNGClipScorer::RunTextModel(const FString& Text, TArray<float>& OutEmbeddi
 	return true;
 }
 
+// Picks the EOS token position from the encoded prompt so pooling stays consistent with CLIP.
 int32 UDNGClipScorer::ResolveEosIndex(TConstArrayView<int64> InputIds, TConstArrayView<int64> AttentionMask) const
 {
 	const int32 EosTokenId = Tokenizer.GetEosTokenId();
@@ -431,6 +444,7 @@ int32 UDNGClipScorer::ResolveEosIndex(TConstArrayView<int64> InputIds, TConstArr
 	return FMath::Max(0, InputIds.Num() - 1);
 }
 
+// Normalizes embeddings to unit length before similarity comparison.
 void UDNGClipScorer::NormalizeInPlace(TArray<float>& Values)
 {
 	double SquaredNorm = 0.0;

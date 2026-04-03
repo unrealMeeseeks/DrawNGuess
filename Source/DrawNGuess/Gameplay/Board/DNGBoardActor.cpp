@@ -16,6 +16,7 @@
 #include "Net/UnrealNetwork.h"
 #include "UObject/ConstructorHelpers.h"
 
+// Initializes the default board mesh, camera, collision, and network update settings.
 ADNGBoardActor::ADNGBoardActor()
 {
 	PrimaryActorTick.bCanEverTick = false;
@@ -53,6 +54,7 @@ ADNGBoardActor::ADNGBoardActor()
 	BoardCamera->OrthoWidth = 1800.0f;
 }
 
+// Ensures the board surface exists before the actor becomes interactive.
 void ADNGBoardActor::BeginPlay()
 {
 	Super::BeginPlay();
@@ -61,6 +63,7 @@ void ADNGBoardActor::BeginPlay()
 	RefreshBoardVisuals();
 }
 
+// Registers the authoritative stroke history for replication.
 void ADNGBoardActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
@@ -68,6 +71,7 @@ void ADNGBoardActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	DOREPLIFETIME(ADNGBoardActor, Segments);
 }
 
+// Projects a world-space point into the board's local 2D coordinate space.
 bool ADNGBoardActor::ProjectWorldToBoard(const FVector& WorldLocation, FVector2D& OutBoardPoint) const
 {
 	const FVector LocalPoint = GetActorTransform().InverseTransformPosition(WorldLocation);
@@ -80,12 +84,14 @@ bool ADNGBoardActor::ProjectWorldToBoard(const FVector& WorldLocation, FVector2D
 		&& FMath::Abs(LocalPoint.Y) <= HalfSize.Y + KINDA_SMALL_NUMBER;
 }
 
+// Converts a logical board-space point back into world space relative to the actor transform.
 FVector ADNGBoardActor::BoardToWorld(const FVector2D& BoardPoint) const
 {
 	const FVector LocalPoint(BoardPoint.X, BoardPoint.Y, 1.0f);
 	return GetActorTransform().TransformPosition(LocalPoint);
 }
 
+// Appends an authoritative segment and immediately draws it on the server.
 void ADNGBoardActor::AddSegment(const FDNGDrawSegment& Segment)
 {
 	if (!HasAuthority())
@@ -98,6 +104,7 @@ void ADNGBoardActor::AddSegment(const FDNGDrawSegment& Segment)
 	ForceNetUpdate();
 }
 
+// Adds a local predicted segment so the painter sees instant feedback before replication returns.
 void ADNGBoardActor::AddPredictedSegment(const FDNGDrawSegment& Segment)
 {
 	EnsureBoardSurface();
@@ -105,6 +112,7 @@ void ADNGBoardActor::AddPredictedSegment(const FDNGDrawSegment& Segment)
 	PendingPredictedSegments.Add(Segment);
 }
 
+// Clears all board state and resets the visible render target.
 void ADNGBoardActor::ClearBoard()
 {
 	EnsureBoardSurface();
@@ -124,11 +132,13 @@ void ADNGBoardActor::ClearBoard()
 	ForceNetUpdate();
 }
 
+// Applies any newly replicated segments to the local board texture.
 void ADNGBoardActor::OnRep_Segments()
 {
 	SyncReplicatedSegments();
 }
 
+// Lazily creates the runtime render target and binds it to the board material.
 void ADNGBoardActor::EnsureBoardSurface()
 {
 	UWorld* World = GetWorld();
@@ -162,6 +172,7 @@ void ADNGBoardActor::EnsureBoardSurface()
 	}
 }
 
+// Rebuilds the render target from authoritative strokes plus still-pending local predictions.
 void ADNGBoardActor::RefreshBoardVisuals()
 {
 	EnsureBoardSurface();
@@ -186,6 +197,7 @@ void ADNGBoardActor::RefreshBoardVisuals()
 	AppliedReplicatedSegmentCount = Segments.Num();
 }
 
+// Exports the current render target to the Saved/Drawings folder as a PNG file.
 bool ADNGBoardActor::SaveBoardImage(FString& OutSavedPath)
 {
 	OutSavedPath.Reset();
@@ -212,6 +224,7 @@ bool ADNGBoardActor::SaveBoardImage(FString& OutSavedPath)
 	return true;
 }
 
+// Clears the board texture back to its configured base color.
 void ADNGBoardActor::ResetBoardSurface()
 {
 	UWorld* World = GetWorld();
@@ -223,6 +236,7 @@ void ADNGBoardActor::ResetBoardSurface()
 	UKismetRenderingLibrary::ClearRenderTarget2D(World, BoardRenderTarget, BoardClearColor);
 }
 
+// Draws only the replicated segments that have not been applied yet.
 void ADNGBoardActor::SyncReplicatedSegments()
 {
 	EnsureBoardSurface();
@@ -259,6 +273,7 @@ void ADNGBoardActor::SyncReplicatedSegments()
 	}
 }
 
+// Renders a single segment onto the board render target using a simple line primitive.
 void ADNGBoardActor::DrawSegmentToBoard(const FDNGDrawSegment& Segment)
 {
 	UWorld* World = GetWorld();
@@ -292,6 +307,7 @@ void ADNGBoardActor::DrawSegmentToBoard(const FDNGDrawSegment& Segment)
 	UKismetRenderingLibrary::EndDrawCanvasToRenderTarget(World, DrawContext);
 }
 
+// Converts normalized UV coordinates into absolute render-target pixels.
 FVector2D ADNGBoardActor::UVToPixel(const FVector2D& UV) const
 {
 	return FVector2D(
@@ -299,6 +315,7 @@ FVector2D ADNGBoardActor::UVToPixel(const FVector2D& UV) const
 		FMath::Clamp(UV.Y, 0.0f, 1.0f) * static_cast<float>(RenderTargetSize.Y));
 }
 
+// Converts legacy board-space coordinates into normalized UV coordinates.
 FVector2D ADNGBoardActor::BoardPointToUV(const FVector2D& BoardPoint) const
 {
 	return FVector2D(

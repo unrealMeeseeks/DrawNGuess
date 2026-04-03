@@ -4,3 +4,5 @@
 
 #include "CoreMinimal.h"
 
+// Primary module header for the DrawNGuess game module.
+

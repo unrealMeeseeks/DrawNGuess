@@ -55,7 +55,7 @@ void ADNGGameMode::Logout(AController* Exiting)
 }
 
 // Validates painter-only drawing input and appends it to the shared board.
-void ADNGGameMode::HandleDrawSegment(ADNGPlayerController* RequestingController, const FVector2D& Start, const FVector2D& End, EDNGDrawTool Tool)
+void ADNGGameMode::HandleDrawSegment(ADNGPlayerController* RequestingController, const FVector2D& Start, const FVector2D& End, EDNGDrawTool Tool, float Thickness, const FLinearColor& Color)
 {
 	ADNGGameState* DNGGameState = GetGameState<ADNGGameState>();
 	if (!DNGGameState || DNGGameState->GetMatchPhase() != EDNGMatchPhase::Drawing || !SpawnedBoardActor)
@@ -73,7 +73,8 @@ void ADNGGameMode::HandleDrawSegment(ADNGPlayerController* RequestingController,
 	Segment.Start = Start;
 	Segment.End = End;
 	Segment.Tool = Tool;
-	Segment.Thickness = Tool == EDNGDrawTool::Eraser ? 18.0f : 7.0f;
+	Segment.Color = Color;
+	Segment.Thickness = FMath::Clamp(Thickness, 1.0f, 64.0f);
 	SpawnedBoardActor->AddSegment(Segment);
 }
 

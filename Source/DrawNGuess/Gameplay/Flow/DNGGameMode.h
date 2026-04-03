@@ -28,7 +28,7 @@ public:
 	virtual void Logout(AController* Exiting) override;
 
 	// Applies one validated segment to the shared board.
-	void HandleDrawSegment(ADNGPlayerController* RequestingController, const FVector2D& Start, const FVector2D& End, EDNGDrawTool Tool);
+	void HandleDrawSegment(ADNGPlayerController* RequestingController, const FVector2D& Start, const FVector2D& End, EDNGDrawTool Tool, float Thickness, const FLinearColor& Color);
 
 	// Finishes the drawing phase and enters the guessing phase.
 	void HandleFinishDrawing(ADNGPlayerController* RequestingController);

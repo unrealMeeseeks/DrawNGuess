@@ -22,6 +22,9 @@ private:
 	// Builds the fallback widget tree when no Blueprint layout exists.
 	void BuildWidgetTree();
 
+	// Binds button callbacks for either Blueprint-owned or fallback-created widgets.
+	void BindActions();
+
 	// Pulls current state from the owning player controller and updates the HUD.
 	void RefreshFromController();
 
@@ -30,6 +33,36 @@ private:
 
 	UFUNCTION()
 	void HandleEraserClicked();
+
+	UFUNCTION()
+	void HandleBlackClicked();
+
+	UFUNCTION()
+	void HandleRedClicked();
+
+	UFUNCTION()
+	void HandleBlueClicked();
+
+	UFUNCTION()
+	void HandleGreenClicked();
+
+	UFUNCTION()
+	void HandlePencilSmallClicked();
+
+	UFUNCTION()
+	void HandlePencilMediumClicked();
+
+	UFUNCTION()
+	void HandlePencilLargeClicked();
+
+	UFUNCTION()
+	void HandleEraserSmallClicked();
+
+	UFUNCTION()
+	void HandleEraserMediumClicked();
+
+	UFUNCTION()
+	void HandleEraserLargeClicked();
 
 	UFUNCTION()
 	void HandleFinishClicked();
@@ -44,46 +77,79 @@ private:
 	void HandleSaveClicked();
 
 	// Text widgets used by the fallback HUD.
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly, Category = "MatchHUD", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
 	TObjectPtr<UTextBlock> PhaseText = nullptr;
 
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly, Category = "MatchHUD", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
 	TObjectPtr<UTextBlock> RoleText = nullptr;
 
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly, Category = "MatchHUD", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
 	TObjectPtr<UTextBlock> ScoreText = nullptr;
 
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly, Category = "MatchHUD", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
 	TObjectPtr<UTextBlock> PromptText = nullptr;
 
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly, Category = "MatchHUD", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
 	TObjectPtr<UTextBlock> ResultText = nullptr;
 
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly, Category = "MatchHUD", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
 	TObjectPtr<UTextBlock> InstructionText = nullptr;
 
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly, Category = "MatchHUD", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
+	TObjectPtr<UTextBlock> BrushText = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category = "MatchHUD", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
 	TObjectPtr<UTextBlock> SaveStatusText = nullptr;
 
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly, Category = "MatchHUD", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
 	TObjectPtr<UEditableTextBox> GuessInput = nullptr;
 
 	// Action buttons used by the fallback HUD.
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly, Category = "MatchHUD", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
 	TObjectPtr<UButton> PencilButton = nullptr;
 
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly, Category = "MatchHUD", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
 	TObjectPtr<UButton> EraserButton = nullptr;
 
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly, Category = "MatchHUD", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
+	TObjectPtr<UButton> BlackButton = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category = "MatchHUD", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
+	TObjectPtr<UButton> RedButton = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category = "MatchHUD", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
+	TObjectPtr<UButton> BlueButton = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category = "MatchHUD", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
+	TObjectPtr<UButton> GreenButton = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category = "MatchHUD", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
+	TObjectPtr<UButton> PencilSmallButton = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category = "MatchHUD", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
+	TObjectPtr<UButton> PencilMediumButton = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category = "MatchHUD", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
+	TObjectPtr<UButton> PencilLargeButton = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category = "MatchHUD", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
+	TObjectPtr<UButton> EraserSmallButton = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category = "MatchHUD", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
+	TObjectPtr<UButton> EraserMediumButton = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category = "MatchHUD", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
+	TObjectPtr<UButton> EraserLargeButton = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category = "MatchHUD", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
 	TObjectPtr<UButton> FinishButton = nullptr;
 
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly, Category = "MatchHUD", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
 	TObjectPtr<UButton> SubmitButton = nullptr;
 
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly, Category = "MatchHUD", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
 	TObjectPtr<UButton> NextRoundButton = nullptr;
 
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly, Category = "MatchHUD", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
 	TObjectPtr<UButton> SaveButton = nullptr;
 };

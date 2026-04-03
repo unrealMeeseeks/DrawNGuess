@@ -29,6 +29,18 @@ public:
 	UFUNCTION(BlueprintCallable)
 	void RequestSetTool(EDNGDrawTool NewTool);
 
+	// Sets the currently selected pencil color.
+	UFUNCTION(BlueprintCallable)
+	void RequestSetPencilColor(const FLinearColor& NewColor);
+
+	// Sets the currently selected pencil thickness.
+	UFUNCTION(BlueprintCallable)
+	void RequestSetPencilThickness(float NewThickness);
+
+	// Sets the currently selected eraser thickness.
+	UFUNCTION(BlueprintCallable)
+	void RequestSetEraserThickness(float NewThickness);
+
 	// Requests that the server finish the drawing phase.
 	UFUNCTION(BlueprintCallable)
 	void RequestFinishDrawing();
@@ -76,10 +88,22 @@ public:
 	FString GetInstructionDescription() const;
 
 	UFUNCTION(BlueprintCallable)
+	FString GetBrushDescription() const;
+
+	UFUNCTION(BlueprintCallable)
 	FString GetSaveStatusDescription() const { return SaveStatusMessage; }
 
 	UFUNCTION(BlueprintCallable)
 	EDNGDrawTool GetActiveTool() const { return ActiveTool; }
+
+	UFUNCTION(BlueprintCallable)
+	FLinearColor GetActivePencilColor() const { return ActivePencilColor; }
+
+	UFUNCTION(BlueprintCallable)
+	float GetActivePencilThickness() const { return PencilThickness; }
+
+	UFUNCTION(BlueprintCallable)
+	float GetActiveEraserThickness() const { return EraserThickness; }
 
 	// Returns whether drawing controls are currently active.
 	UFUNCTION(BlueprintCallable)
@@ -96,7 +120,7 @@ public:
 protected:
 	// Reliable RPC used to send one segment from the local painter to the server.
 	UFUNCTION(Server, Reliable)
-	void ServerAddDrawSegment(const FVector2D& Start, const FVector2D& End, EDNGDrawTool Tool);
+	void ServerAddDrawSegment(const FVector2D& Start, const FVector2D& End, EDNGDrawTool Tool, float Thickness, const FLinearColor& Color);
 
 	// Reliable RPC used to finish the drawing phase.
 	UFUNCTION(Server, Reliable)
@@ -157,6 +181,18 @@ private:
 	// Locally selected drawing tool.
 	UPROPERTY()
 	EDNGDrawTool ActiveTool = EDNGDrawTool::Pencil;
+
+	// Currently selected pencil color.
+	UPROPERTY()
+	FLinearColor ActivePencilColor = FLinearColor::Black;
+
+	// Currently selected pencil thickness.
+	UPROPERTY()
+	float PencilThickness = 7.0f;
+
+	// Currently selected eraser thickness.
+	UPROPERTY()
+	float EraserThickness = 18.0f;
 
 	// Latest local save status displayed in the HUD.
 	UPROPERTY()

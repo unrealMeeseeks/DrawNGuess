@@ -258,6 +258,7 @@ void ADNGBoardActor::SyncReplicatedSegments()
 		const FDNGDrawSegment& Segment = Segments[AppliedReplicatedSegmentCount];
 		if (PendingPredictedSegments.Num() > 0
 			&& PendingPredictedSegments[0].Tool == Segment.Tool
+			&& PendingPredictedSegments[0].Color.Equals(Segment.Color, 0.001f)
 			&& FMath::IsNearlyEqual(PendingPredictedSegments[0].Thickness, Segment.Thickness)
 			&& PendingPredictedSegments[0].Start.Equals(Segment.Start, 0.1f)
 			&& PendingPredictedSegments[0].End.Equals(Segment.End, 0.1f))
@@ -291,7 +292,7 @@ void ADNGBoardActor::DrawSegmentToBoard(const FDNGDrawSegment& Segment)
 	{
 		const FVector2D StartPixel = UVToPixel(Segment.Start);
 		const FVector2D EndPixel = UVToPixel(Segment.End);
-		const FLinearColor DrawColor = Segment.Tool == EDNGDrawTool::Eraser ? EraserColor : PencilColor;
+		const FLinearColor DrawColor = Segment.Tool == EDNGDrawTool::Eraser ? EraserColor : Segment.Color;
 		const float PixelThickness = FMath::Max(1.0f, Segment.Thickness);
 
 		if (StartPixel.Equals(EndPixel, 0.5f))

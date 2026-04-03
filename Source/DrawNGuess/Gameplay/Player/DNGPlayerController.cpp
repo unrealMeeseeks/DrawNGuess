@@ -89,6 +89,24 @@ void ADNGPlayerController::RequestSetTool(EDNGDrawTool NewTool)
 	ActiveTool = NewTool;
 }
 
+// Updates the local pencil color preset.
+void ADNGPlayerController::RequestSetPencilColor(const FLinearColor& NewColor)
+{
+	ActivePencilColor = NewColor;
+}
+
+// Updates the local pencil thickness preset.
+void ADNGPlayerController::RequestSetPencilThickness(float NewThickness)
+{
+	PencilThickness = FMath::Clamp(NewThickness, 1.0f, 64.0f);
+}
+
+// Updates the local eraser thickness preset.
+void ADNGPlayerController::RequestSetEraserThickness(float NewThickness)
+{
+	EraserThickness = FMath::Clamp(NewThickness, 1.0f, 64.0f);
+}
+
 // Sends a finish request only when painter controls are currently valid.
 void ADNGPlayerController::RequestFinishDrawing()
 {
@@ -272,6 +290,19 @@ FString ADNGPlayerController::GetInstructionDescription() const
 	}
 }
 
+// Summarizes the currently selected tool, color, and thickness presets.
+FString ADNGPlayerController::GetBrushDescription() const
+{
+	const FString ToolName = ActiveTool == EDNGDrawTool::Eraser ? TEXT("Eraser") : TEXT("Pencil");
+	const FString ColorDescription = FString::Printf(TEXT("R%.0f G%.0f B%.0f"), ActivePencilColor.R * 255.0f, ActivePencilColor.G * 255.0f, ActivePencilColor.B * 255.0f);
+	return FString::Printf(
+		TEXT("Tool: %s | Pencil color: %s | Pencil size: %.0f | Eraser size: %.0f"),
+		*ToolName,
+		*ColorDescription,
+		PencilThickness,
+		EraserThickness);
+}
+
 // Drawing is only allowed for the local painter during the drawing phase.
 bool ADNGPlayerController::CanUseDrawingControls() const
 {
@@ -291,11 +322,11 @@ bool ADNGPlayerController::CanAdvanceRound() const
 }
 
 // Forwards one locally generated segment to the authoritative GameMode.
-void ADNGPlayerController::ServerAddDrawSegment_Implementation(const FVector2D& Start, const FVector2D& End, EDNGDrawTool Tool)
+void ADNGPlayerController::ServerAddDrawSegment_Implementation(const FVector2D& Start, const FVector2D& End, EDNGDrawTool Tool, float Thickness, const FLinearColor& Color)
 {
 	if (ADNGGameMode* DNGGameMode = Cast<ADNGGameMode>(GetWorld()->GetAuthGameMode()))
 	{
-		DNGGameMode->HandleDrawSegment(this, Start, End, Tool);
+		DNGGameMode->HandleDrawSegment(this, Start, End, Tool, Thickness, Color);
 	}
 }
 
@@ -408,14 +439,15 @@ void ADNGPlayerController::EmitDrawSegment(const FVector2D& Start, const FVector
 		Segment.Start = FMath::Lerp(Start, End, Alpha0);
 		Segment.End = FMath::Lerp(Start, End, Alpha1);
 		Segment.Tool = ActiveTool;
-		Segment.Thickness = ActiveTool == EDNGDrawTool::Eraser ? 18.0f : 7.0f;
+		Segment.Color = ActivePencilColor;
+		Segment.Thickness = ActiveTool == EDNGDrawTool::Eraser ? EraserThickness : PencilThickness;
 
 		if (ADNGBoardActor* BoardActor = GetBoardActor())
 		{
 			BoardActor->AddPredictedSegment(Segment);
 		}
 
-		ServerAddDrawSegment(Segment.Start, Segment.End, ActiveTool);
+		ServerAddDrawSegment(Segment.Start, Segment.End, ActiveTool, Segment.Thickness, Segment.Color);
 	}
 }
 

@@ -110,6 +110,10 @@ struct FDNGDrawSegment
 	UPROPERTY()
 	EDNGDrawTool Tool = EDNGDrawTool::Pencil;
 
+	// Pencil color carried with the segment so both peers render the same result.
+	UPROPERTY()
+	FLinearColor Color = FLinearColor::Black;
+
 	// Brush thickness expressed in render-target pixels.
 	UPROPERTY()
 	float Thickness = 6.0f;

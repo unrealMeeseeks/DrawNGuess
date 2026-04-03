@@ -22,6 +22,9 @@ private:
 	// Builds the default widget tree when no Blueprint hierarchy is provided.
 	void BuildWidgetTree();
 
+	// Binds button callbacks for either Blueprint-owned or fallback-created widgets.
+	void BindActions();
+
 	// Loads saved prompt values and join address into the inputs.
 	void LoadSavedValues();
 
@@ -38,25 +41,25 @@ private:
 	void HandleSaveClicked();
 
 	// Prompt prefix input fields.
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly, Category = "MainMenu", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
 	TObjectPtr<UEditableTextBox> PositivePrefixInput = nullptr;
 
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly, Category = "MainMenu", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
 	TObjectPtr<UEditableTextBox> NegativePrefixInput = nullptr;
 
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly, Category = "MainMenu", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
 	TObjectPtr<UEditableTextBox> JoinAddressInput = nullptr;
 
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly, Category = "MainMenu", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
 	TObjectPtr<UButton> HostButton = nullptr;
 
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly, Category = "MainMenu", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
 	TObjectPtr<UButton> JoinButton = nullptr;
 
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly, Category = "MainMenu", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
 	TObjectPtr<UButton> SaveButton = nullptr;
 
 	// Status line shown under the menu controls.
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly, Category = "MainMenu", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
 	TObjectPtr<UTextBlock> StatusText = nullptr;
 };

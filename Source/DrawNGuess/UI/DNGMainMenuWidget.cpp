@@ -43,8 +43,10 @@ void UDNGMainMenuWidget::NativeOnInitialized()
 	if (!WidgetTree->RootWidget)
 	{
 		BuildWidgetTree();
-		LoadSavedValues();
 	}
+
+	BindActions();
+	LoadSavedValues();
 }
 
 // Builds a minimal menu entirely in C++ when no Blueprint layout exists.
@@ -106,15 +108,48 @@ void UDNGMainMenuWidget::BuildWidgetTree()
 	}
 }
 
+void UDNGMainMenuWidget::BindActions()
+{
+	if (SaveButton)
+	{
+		SaveButton->OnClicked.RemoveDynamic(this, &UDNGMainMenuWidget::HandleSaveClicked);
+		SaveButton->OnClicked.AddDynamic(this, &UDNGMainMenuWidget::HandleSaveClicked);
+	}
+
+	if (HostButton)
+	{
+		HostButton->OnClicked.RemoveDynamic(this, &UDNGMainMenuWidget::HandleHostClicked);
+		HostButton->OnClicked.AddDynamic(this, &UDNGMainMenuWidget::HandleHostClicked);
+	}
+
+	if (JoinButton)
+	{
+		JoinButton->OnClicked.RemoveDynamic(this, &UDNGMainMenuWidget::HandleJoinClicked);
+		JoinButton->OnClicked.AddDynamic(this, &UDNGMainMenuWidget::HandleJoinClicked);
+	}
+}
+
 // Restores saved prompt values and join address from the local GameInstance.
 void UDNGMainMenuWidget::LoadSavedValues()
 {
 	if (const UDNGGameInstance* GameInstance = Cast<UDNGGameInstance>(GetGameInstance()))
 	{
 		const FDNGPromptSettings& Settings = GameInstance->GetPromptSettings();
-		PositivePrefixInput->SetText(FText::FromString(Settings.PositivePrefix));
-		NegativePrefixInput->SetText(FText::FromString(Settings.NegativePrefix));
-		JoinAddressInput->SetText(FText::FromString(Settings.LastJoinAddress));
+
+		if (PositivePrefixInput)
+		{
+			PositivePrefixInput->SetText(FText::FromString(Settings.PositivePrefix));
+		}
+
+		if (NegativePrefixInput)
+		{
+			NegativePrefixInput->SetText(FText::FromString(Settings.NegativePrefix));
+		}
+
+		if (JoinAddressInput)
+		{
+			JoinAddressInput->SetText(FText::FromString(Settings.LastJoinAddress));
+		}
 	}
 }
 

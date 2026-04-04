@@ -3,11 +3,13 @@
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
 #include "Templates/SubclassOf.h"
+#include "../../AI/DeepSeek/DNGDeepSeekTypes.h"
 #include "../../Core/DNGTypes.h"
 #include "DNGPlayerController.generated.h"
 
 class ADNGBoardActor;
 class ADNGGameState;
+class UDNGDeepSeekAgentService;
 class UDNGMainMenuWidget;
 class UDNGMatchWidget;
 
@@ -57,6 +59,14 @@ public:
 	UFUNCTION(BlueprintCallable)
 	void RequestSaveBoard();
 
+	// Requests an agent-generated plan and lets the model decide draw, revise, or noop.
+	UFUNCTION(BlueprintCallable)
+	void RequestAgentInstruction(const FString& Instruction);
+
+	// Clears the locally remembered agent SVG state and any queued playback.
+	UFUNCTION(BlueprintCallable)
+	void ResetAgentSession();
+
 	// Returns whether this local player is the active painter.
 	UFUNCTION(BlueprintCallable)
 	bool IsPainterLocal() const;
@@ -91,6 +101,9 @@ public:
 	FString GetBrushDescription() const;
 
 	UFUNCTION(BlueprintCallable)
+	FString GetAgentStatusDescription() const { return AgentStatusMessage; }
+
+	UFUNCTION(BlueprintCallable)
 	FString GetSaveStatusDescription() const { return SaveStatusMessage; }
 
 	UFUNCTION(BlueprintCallable)
@@ -104,6 +117,9 @@ public:
 
 	UFUNCTION(BlueprintCallable)
 	float GetActiveEraserThickness() const { return EraserThickness; }
+
+	UFUNCTION(BlueprintCallable)
+	bool CanUseAgentDrawingControls() const;
 
 	// Returns whether drawing controls are currently active.
 	UFUNCTION(BlueprintCallable)
@@ -134,9 +150,16 @@ protected:
 	UFUNCTION(Server, Reliable)
 	void ServerNextRound();
 
+	// Reliable RPC used by the painter to clear the authoritative board before SVG playback.
+	UFUNCTION(Server, Reliable)
+	void ServerClearBoardForAgent();
+
 private:
 	// Emits one logical segment locally and remotely.
 	void EmitDrawSegment(const FVector2D& Start, const FVector2D& End);
+
+	// Emits one prebuilt segment locally and remotely.
+	void EmitResolvedSegment(const FDNGDrawSegment& Segment);
 
 	// Keeps the view target locked to the board camera.
 	void EnsureBoardViewTarget();
@@ -153,6 +176,24 @@ private:
 
 	// Converts the cursor position into normalized board UV coordinates.
 	bool TryGetBoardPoint(FVector2D& OutBoardPoint) const;
+
+	// Ensures the DeepSeek service exists and is configured from the current GameInstance state.
+	void EnsureDeepSeekAgentService();
+
+	// Handles an asynchronous DeepSeek response and converts it into queued board segments.
+	void HandleAgentPlanResult(bool bSuccess, const FDNGDeepSeekDrawingPlan& Plan, const FString& ErrorMessage);
+
+	// Finalizes one accepted agent plan into SVG playback.
+	void FinalizeAgentPlan(const FDNGDeepSeekDrawingPlan& Plan);
+
+	// Parses the authoritative SVG and starts playback after the board has been cleared.
+	void QueueAgentSvgPlayback(const FDNGDeepSeekDrawingPlan& Plan);
+
+	// Replays one queued segment every timer tick.
+	void PlayNextAgentSegment();
+
+	// Resets local agent request/playback state when a new round starts.
+	void RefreshAgentRoundState();
 
 	// Convenience accessors for common replicated state objects.
 	ADNGGameState* GetDNGGameState() const;
@@ -198,6 +239,30 @@ private:
 	UPROPERTY()
 	FString SaveStatusMessage;
 
+	// Latest agent status text shown in the HUD.
+	UPROPERTY()
+	FString AgentStatusMessage;
+
+	// Latest final SVG returned by the agent and used as revision context.
+	UPROPERTY()
+	FString LastAgentSvg;
+
+	// Latest raw JSON content returned by the model for debugging.
+	UPROPERTY()
+	FString LastAgentRawResponse;
+
+	// Original user instruction for the current agent request chain.
+	UPROPERTY()
+	FString PendingAgentOriginalInstruction;
+
+	// Local DeepSeek HTTP service used by this controller.
+	UPROPERTY(Transient)
+	TObjectPtr<UDNGDeepSeekAgentService> DeepSeekAgentService = nullptr;
+
+	// Segments currently queued for timed playback.
+	UPROPERTY(Transient)
+	TArray<FDNGDrawSegment> QueuedAgentSegments;
+
 	// Optional Blueprint override for the menu widget.
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UDNGMainMenuWidget> MainMenuWidgetClass;
@@ -213,4 +278,22 @@ private:
 	// Maximum UV-space step allowed before long drags are subdivided.
 	UPROPERTY(EditDefaultsOnly)
 	float MaxSegmentLength = 0.01f;
+
+	// Playback interval used when replaying agent-generated segments.
+	UPROPERTY(EditDefaultsOnly, Category = "Agent")
+	float AgentPlaybackInterval = 0.035f;
+
+	// Tracks whether an asynchronous DeepSeek request is currently in flight.
+	UPROPERTY(Transient)
+	bool bAgentRequestInFlight = false;
+
+	// Current segment playback index inside the queued agent segment list.
+	UPROPERTY(Transient)
+	int32 NextAgentSegmentIndex = 0;
+
+	// Last round number seen by this controller so agent state can reset automatically.
+	UPROPERTY(Transient)
+	int32 LastObservedRoundNumber = INDEX_NONE;
+
+	FTimerHandle AgentPlaybackTimerHandle;
 };

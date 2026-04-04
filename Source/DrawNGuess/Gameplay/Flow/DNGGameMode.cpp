@@ -96,6 +96,24 @@ void ADNGGameMode::HandleFinishDrawing(ADNGPlayerController* RequestingControlle
 	DNGGameState->SetMatchPhase(EDNGMatchPhase::Guessing);
 }
 
+// Lets the active painter reset the board so agent SVG playback can redraw the final state.
+void ADNGGameMode::HandleClearBoardForAgent(ADNGPlayerController* RequestingController)
+{
+	ADNGGameState* DNGGameState = GetGameState<ADNGGameState>();
+	if (!DNGGameState || DNGGameState->GetMatchPhase() != EDNGMatchPhase::Drawing || !SpawnedBoardActor)
+	{
+		return;
+	}
+
+	ADNGPlayerState* RequestingPlayerState = RequestingController ? RequestingController->GetPlayerState<ADNGPlayerState>() : nullptr;
+	if (!RequestingPlayerState || !DNGGameState->IsPainter(RequestingPlayerState))
+	{
+		return;
+	}
+
+	SpawnedBoardActor->ClearBoard();
+}
+
 // Scores the submitted guess and publishes the round result.
 void ADNGGameMode::HandleSubmitGuess(ADNGPlayerController* RequestingController, const FString& GuessText)
 {

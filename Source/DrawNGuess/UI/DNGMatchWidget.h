@@ -6,6 +6,7 @@
 
 class UButton;
 class UEditableTextBox;
+class UMultiLineEditableTextBox;
 class UTextBlock;
 
 // Fallback in-match HUD implemented entirely in C++.
@@ -76,6 +77,12 @@ private:
 	UFUNCTION()
 	void HandleSaveClicked();
 
+	UFUNCTION()
+	void HandleAgentSendClicked();
+
+	UFUNCTION()
+	void HandleAgentResetClicked();
+
 	// Text widgets used by the fallback HUD.
 	UPROPERTY(BlueprintReadOnly, Category = "MatchHUD", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
 	TObjectPtr<UTextBlock> PhaseText = nullptr;
@@ -103,6 +110,9 @@ private:
 
 	UPROPERTY(BlueprintReadOnly, Category = "MatchHUD", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
 	TObjectPtr<UEditableTextBox> GuessInput = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category = "MatchHUD", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
+	TObjectPtr<UMultiLineEditableTextBox> AgentInstructionInput = nullptr;
 
 	// Action buttons used by the fallback HUD.
 	UPROPERTY(BlueprintReadOnly, Category = "MatchHUD", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
@@ -152,4 +162,13 @@ private:
 
 	UPROPERTY(BlueprintReadOnly, Category = "MatchHUD", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
 	TObjectPtr<UButton> SaveButton = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category = "MatchHUD", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
+	TObjectPtr<UButton> AgentSendButton = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category = "MatchHUD", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
+	TObjectPtr<UButton> AgentResetButton = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category = "MatchHUD", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
+	TObjectPtr<UTextBlock> AgentStatusText = nullptr;
 };

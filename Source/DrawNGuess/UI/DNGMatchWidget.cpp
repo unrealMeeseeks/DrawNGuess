@@ -7,6 +7,7 @@
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/EditableTextBox.h"
+#include "Components/MultiLineEditableTextBox.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Fonts/SlateFontInfo.h"
@@ -150,6 +151,18 @@ void UDNGMatchWidget::BindActions()
 		SaveButton->OnClicked.RemoveDynamic(this, &UDNGMatchWidget::HandleSaveClicked);
 		SaveButton->OnClicked.AddDynamic(this, &UDNGMatchWidget::HandleSaveClicked);
 	}
+
+	if (AgentSendButton)
+	{
+		AgentSendButton->OnClicked.RemoveDynamic(this, &UDNGMatchWidget::HandleAgentSendClicked);
+		AgentSendButton->OnClicked.AddDynamic(this, &UDNGMatchWidget::HandleAgentSendClicked);
+	}
+
+	if (AgentResetButton)
+	{
+		AgentResetButton->OnClicked.RemoveDynamic(this, &UDNGMatchWidget::HandleAgentResetClicked);
+		AgentResetButton->OnClicked.AddDynamic(this, &UDNGMatchWidget::HandleAgentResetClicked);
+	}
 }
 
 // Builds the prototype HUD entirely in C++ for projects that do not yet use Blueprint UI.
@@ -178,8 +191,11 @@ void UDNGMatchWidget::BuildWidgetTree()
 	InstructionText = MakeMatchLabel(WidgetTree, TEXT(""), 14);
 	BrushText = MakeMatchLabel(WidgetTree, TEXT("Brush:"), 14);
 	SaveStatusText = MakeMatchLabel(WidgetTree, TEXT(""), 12);
+	AgentStatusText = MakeMatchLabel(WidgetTree, TEXT(""), 12);
 	GuessInput = WidgetTree->ConstructWidget<UEditableTextBox>(UEditableTextBox::StaticClass(), TEXT("GuessInput"));
 	GuessInput->SetHintText(FText::FromString(TEXT("Type your guess")));
+	AgentInstructionInput = WidgetTree->ConstructWidget<UMultiLineEditableTextBox>(UMultiLineEditableTextBox::StaticClass(), TEXT("AgentInstructionInput"));
+	AgentInstructionInput->SetHintText(FText::FromString(TEXT("Describe what the agent should draw or revise")));
 
 	PencilButton = MakeMatchButton(WidgetTree, TEXT("Pencil"));
 	EraserButton = MakeMatchButton(WidgetTree, TEXT("Eraser"));
@@ -197,6 +213,8 @@ void UDNGMatchWidget::BuildWidgetTree()
 	SubmitButton = MakeMatchButton(WidgetTree, TEXT("Submit Guess"));
 	NextRoundButton = MakeMatchButton(WidgetTree, TEXT("Next Round"));
 	SaveButton = MakeMatchButton(WidgetTree, TEXT("Save Board"));
+	AgentSendButton = MakeMatchButton(WidgetTree, TEXT("Send"));
+	AgentResetButton = MakeMatchButton(WidgetTree, TEXT("Reset Agent"));
 	BlackButton->SetBackgroundColor(FLinearColor::Black);
 	RedButton->SetBackgroundColor(FLinearColor(0.75f, 0.15f, 0.15f, 1.0f));
 	BlueButton->SetBackgroundColor(FLinearColor(0.15f, 0.35f, 0.9f, 1.0f));
@@ -221,6 +239,10 @@ void UDNGMatchWidget::BuildWidgetTree()
 	Content->AddChildToVerticalBox(EraserMediumButton);
 	Content->AddChildToVerticalBox(EraserLargeButton);
 	Content->AddChildToVerticalBox(FinishButton);
+	Content->AddChildToVerticalBox(AgentInstructionInput);
+	Content->AddChildToVerticalBox(AgentSendButton);
+	Content->AddChildToVerticalBox(AgentResetButton);
+	Content->AddChildToVerticalBox(AgentStatusText);
 	Content->AddChildToVerticalBox(GuessInput);
 	Content->AddChildToVerticalBox(SubmitButton);
 	Content->AddChildToVerticalBox(ResultText);
@@ -228,22 +250,6 @@ void UDNGMatchWidget::BuildWidgetTree()
 	Content->AddChildToVerticalBox(SaveStatusText);
 	Content->AddChildToVerticalBox(NextRoundButton);
 
-	PencilButton->OnClicked.AddDynamic(this, &UDNGMatchWidget::HandlePencilClicked);
-	EraserButton->OnClicked.AddDynamic(this, &UDNGMatchWidget::HandleEraserClicked);
-	BlackButton->OnClicked.AddDynamic(this, &UDNGMatchWidget::HandleBlackClicked);
-	RedButton->OnClicked.AddDynamic(this, &UDNGMatchWidget::HandleRedClicked);
-	BlueButton->OnClicked.AddDynamic(this, &UDNGMatchWidget::HandleBlueClicked);
-	GreenButton->OnClicked.AddDynamic(this, &UDNGMatchWidget::HandleGreenClicked);
-	PencilSmallButton->OnClicked.AddDynamic(this, &UDNGMatchWidget::HandlePencilSmallClicked);
-	PencilMediumButton->OnClicked.AddDynamic(this, &UDNGMatchWidget::HandlePencilMediumClicked);
-	PencilLargeButton->OnClicked.AddDynamic(this, &UDNGMatchWidget::HandlePencilLargeClicked);
-	EraserSmallButton->OnClicked.AddDynamic(this, &UDNGMatchWidget::HandleEraserSmallClicked);
-	EraserMediumButton->OnClicked.AddDynamic(this, &UDNGMatchWidget::HandleEraserMediumClicked);
-	EraserLargeButton->OnClicked.AddDynamic(this, &UDNGMatchWidget::HandleEraserLargeClicked);
-	FinishButton->OnClicked.AddDynamic(this, &UDNGMatchWidget::HandleFinishClicked);
-	SubmitButton->OnClicked.AddDynamic(this, &UDNGMatchWidget::HandleSubmitClicked);
-	NextRoundButton->OnClicked.AddDynamic(this, &UDNGMatchWidget::HandleNextRoundClicked);
-	SaveButton->OnClicked.AddDynamic(this, &UDNGMatchWidget::HandleSaveClicked);
 }
 
 // Refreshes text and button states from the owning player controller.
@@ -295,6 +301,11 @@ void UDNGMatchWidget::RefreshFromController()
 		SaveStatusText->SetText(FText::FromString(Controller->GetSaveStatusDescription()));
 	}
 
+	if (AgentStatusText)
+	{
+		AgentStatusText->SetText(FText::FromString(Controller->GetAgentStatusDescription()));
+	}
+
 	const bool bCanDraw = Controller->CanUseDrawingControls();
 	const bool bCanGuess = Controller->CanSubmitGuess();
 	const bool bCanAdvance = Controller->CanAdvanceRound();
@@ -316,6 +327,9 @@ void UDNGMatchWidget::RefreshFromController()
 	if (SubmitButton) { SubmitButton->SetIsEnabled(bCanGuess); }
 	if (NextRoundButton) { NextRoundButton->SetIsEnabled(bCanAdvance); }
 	if (SaveButton) { SaveButton->SetIsEnabled(true); }
+	if (AgentInstructionInput) { AgentInstructionInput->SetIsEnabled(bCanDraw); }
+	if (AgentSendButton) { AgentSendButton->SetIsEnabled(Controller->CanUseAgentDrawingControls()); }
+	if (AgentResetButton) { AgentResetButton->SetIsEnabled(true); }
 }
 
 // Switches to the pencil tool.
@@ -469,5 +483,21 @@ void UDNGMatchWidget::HandleSaveClicked()
 	if (ADNGPlayerController* Controller = GetOwningPlayer<ADNGPlayerController>())
 	{
 		Controller->RequestSaveBoard();
+	}
+}
+
+void UDNGMatchWidget::HandleAgentSendClicked()
+{
+	if (ADNGPlayerController* Controller = GetOwningPlayer<ADNGPlayerController>())
+	{
+		Controller->RequestAgentInstruction(AgentInstructionInput ? AgentInstructionInput->GetText().ToString() : FString());
+	}
+}
+
+void UDNGMatchWidget::HandleAgentResetClicked()
+{
+	if (ADNGPlayerController* Controller = GetOwningPlayer<ADNGPlayerController>())
+	{
+		Controller->ResetAgentSession();
 	}
 }

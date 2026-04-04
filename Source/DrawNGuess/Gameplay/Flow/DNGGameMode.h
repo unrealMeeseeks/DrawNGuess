@@ -33,6 +33,9 @@ public:
 	// Finishes the drawing phase and enters the guessing phase.
 	void HandleFinishDrawing(ADNGPlayerController* RequestingController);
 
+	// Clears the shared board when the active painter wants to replace it with an SVG redraw.
+	void HandleClearBoardForAgent(ADNGPlayerController* RequestingController);
+
 	// Scores the guess and transitions into the result phase.
 	void HandleSubmitGuess(ADNGPlayerController* RequestingController, const FString& GuessText);
 

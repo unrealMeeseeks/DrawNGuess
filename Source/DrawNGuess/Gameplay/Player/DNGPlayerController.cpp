@@ -1,5 +1,8 @@
 #include "DNGPlayerController.h"
 
+#include "../../AI/DeepSeek/DNGDeepSeekAgentService.h"
+#include "../../AI/DeepSeek/DNGSvgParser.h"
+#include "../Flow/DNGGameInstance.h"
 #include "../Board/DNGBoardActor.h"
 #include "../Flow/DNGGameMode.h"
 #include "../Flow/DNGGameState.h"
@@ -10,6 +13,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/HitResult.h"
 #include "Kismet/GameplayStatics.h"
+#include "TimerManager.h"
 #include "Engine/World.h"
 
 // Enables mouse-driven interaction and sets default fallback widget classes.
@@ -29,6 +33,7 @@ void ADNGPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
 
+	EnsureDeepSeekAgentService();
 	RefreshWidgets();
 	ApplyInputMode();
 	SetIgnoreLookInput(true);
@@ -40,6 +45,8 @@ void ADNGPlayerController::BeginPlay()
 void ADNGPlayerController::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+
+	RefreshAgentRoundState();
 
 	if (!IsLocalController() || !bPointerHeld || !CanUseDrawingControls())
 	{
@@ -155,6 +162,64 @@ void ADNGPlayerController::RequestSaveBoard()
 	}
 }
 
+// Starts an agent request and lets the model decide whether to draw, revise, or noop.
+void ADNGPlayerController::RequestAgentInstruction(const FString& Instruction)
+{
+	if (!CanUseAgentDrawingControls())
+	{
+		AgentStatusMessage = TEXT("Agent drawing is only available for the active painter during the drawing phase.");
+		return;
+	}
+
+	const FString TrimmedInstruction = Instruction.TrimStartAndEnd();
+	if (TrimmedInstruction.IsEmpty())
+	{
+		AgentStatusMessage = TEXT("Agent instruction is empty.");
+		return;
+	}
+
+	EnsureDeepSeekAgentService();
+	if (!DeepSeekAgentService || !DeepSeekAgentService->HasApiKey())
+	{
+		AgentStatusMessage = TEXT("DeepSeek API key is missing. Add Config/DeepSeekAgent.json or enter and save it in the menu.");
+		return;
+	}
+
+	bAgentRequestInFlight = true;
+	PendingAgentOriginalInstruction = TrimmedInstruction;
+	AgentStatusMessage = TEXT("Requesting DeepSeek SVG...");
+
+	TWeakObjectPtr<ADNGPlayerController> WeakThis(this);
+	DeepSeekAgentService->RequestDrawingPlan(
+		TrimmedInstruction,
+		LastAgentSvg,
+		UDNGDeepSeekAgentService::FOnDeepSeekPlanCompleted::CreateLambda(
+			[WeakThis](bool bSuccess, const FDNGDeepSeekDrawingPlan& Plan, const FString& ErrorMessage)
+			{
+				if (WeakThis.IsValid())
+				{
+					WeakThis->HandleAgentPlanResult(bSuccess, Plan, ErrorMessage);
+				}
+			}));
+}
+
+// Clears any remembered SVG/replay state so the next agent request starts cleanly.
+void ADNGPlayerController::ResetAgentSession()
+{
+	bAgentRequestInFlight = false;
+	LastAgentSvg.Reset();
+	LastAgentRawResponse.Reset();
+	PendingAgentOriginalInstruction.Reset();
+	QueuedAgentSegments.Reset();
+	NextAgentSegmentIndex = 0;
+	AgentStatusMessage = TEXT("Agent session reset.");
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(AgentPlaybackTimerHandle);
+	}
+}
+
 // Checks the replicated GameState to see whether this local player is the painter.
 bool ADNGPlayerController::IsPainterLocal() const
 {
@@ -250,7 +315,8 @@ FString ADNGPlayerController::GetResultDescription() const
 		}
 
 		return FString::Printf(
-			TEXT("Guess: %s\nPositive: %s\nNegative: %s\nPositive score: %.6f\nNegative score: %.6f\nScore delta: %.6f\nPositive probability: %.6f\nNegative probability: %.6f\nDecision: %s\nBackend: %s\nSaved board: %s\nDiagnostic: %s"),
+			// TEXT("Guess: %s\nPositive: %s\nNegative: %s\nPositive score: %.6f\nNegative score: %.6f\nScore delta: %.6f\nPositive probability: %.6f\nNegative probability: %.6f\nDecision: %s\nBackend: %s\nSaved board: %s\nDiagnostic: %s"),
+			TEXT("Guess: %s\nPositive: %s\nNegative: %s\nPositive score: %.6f\nNegative score: %.6f\nScore delta: %.6f\nPositive probability: %.6f\nNegative probability: %.6f\nDecision: %s"),
 			*Result.GuessText,
 			*Result.PositivePrompt,
 			*Result.NegativePrompt,
@@ -259,10 +325,10 @@ FString ADNGPlayerController::GetResultDescription() const
 			Result.PositiveScore - Result.NegativeScore,
 			Result.PositiveProbability,
 			Result.NegativeProbability,
-			Result.bGuessAccepted ? TEXT("Accepted") : TEXT("Rejected"),
-			Result.ScoringBackend.IsEmpty() ? TEXT("Unknown") : *Result.ScoringBackend,
-			Result.SavedBoardPath.IsEmpty() ? TEXT("(none)") : *Result.SavedBoardPath,
-			Result.DiagnosticMessage.IsEmpty() ? TEXT("(none)") : *Result.DiagnosticMessage);
+			Result.bGuessAccepted ? TEXT("Accepted") : TEXT("Rejected"));
+			// Result.ScoringBackend.IsEmpty() ? TEXT("Unknown") : *Result.ScoringBackend,
+			// Result.SavedBoardPath.IsEmpty() ? TEXT("(none)") : *Result.SavedBoardPath,
+			// Result.DiagnosticMessage.IsEmpty() ? TEXT("(none)") : *Result.DiagnosticMessage);
 	}
 
 	return TEXT("No result yet");
@@ -301,6 +367,13 @@ FString ADNGPlayerController::GetBrushDescription() const
 		*ColorDescription,
 		PencilThickness,
 		EraserThickness);
+}
+
+// Agent requests are limited to the active painter and blocked while another request is pending.
+bool ADNGPlayerController::CanUseAgentDrawingControls() const
+{
+	const bool bPlaybackActive = GetWorld() && GetWorld()->GetTimerManager().IsTimerActive(AgentPlaybackTimerHandle);
+	return CanUseDrawingControls() && !bAgentRequestInFlight && !bPlaybackActive;
 }
 
 // Drawing is only allowed for the local painter during the drawing phase.
@@ -354,6 +427,15 @@ void ADNGPlayerController::ServerNextRound_Implementation()
 	if (ADNGGameMode* DNGGameMode = Cast<ADNGGameMode>(GetWorld()->GetAuthGameMode()))
 	{
 		DNGGameMode->HandleNextRound(this);
+	}
+}
+
+// Clears the authoritative board so agent SVG playback can redraw the final state from scratch.
+void ADNGPlayerController::ServerClearBoardForAgent_Implementation()
+{
+	if (ADNGGameMode* DNGGameMode = Cast<ADNGGameMode>(GetWorld()->GetAuthGameMode()))
+	{
+		DNGGameMode->HandleClearBoardForAgent(this);
 	}
 }
 
@@ -442,13 +524,19 @@ void ADNGPlayerController::EmitDrawSegment(const FVector2D& Start, const FVector
 		Segment.Color = ActivePencilColor;
 		Segment.Thickness = ActiveTool == EDNGDrawTool::Eraser ? EraserThickness : PencilThickness;
 
-		if (ADNGBoardActor* BoardActor = GetBoardActor())
-		{
-			BoardActor->AddPredictedSegment(Segment);
-		}
-
-		ServerAddDrawSegment(Segment.Start, Segment.End, ActiveTool, Segment.Thickness, Segment.Color);
+		EmitResolvedSegment(Segment);
 	}
+}
+
+// Emits a fully resolved segment without reapplying local tool-size selection logic.
+void ADNGPlayerController::EmitResolvedSegment(const FDNGDrawSegment& Segment)
+{
+	if (ADNGBoardActor* BoardActor = GetBoardActor())
+	{
+		BoardActor->AddPredictedSegment(Segment);
+	}
+
+	ServerAddDrawSegment(Segment.Start, Segment.End, Segment.Tool, Segment.Thickness, Segment.Color);
 }
 
 // Keeps the controller camera locked to the board actor's orthographic camera.
@@ -524,6 +612,141 @@ bool ADNGPlayerController::TryGetBoardPoint(FVector2D& OutBoardPoint) const
 
 	OutBoardPoint = BoardActor->BoardPointToUV(BoardPoint);
 	return true;
+}
+
+// Ensures the local DeepSeek service exists and mirrors the latest local config from GameInstance.
+void ADNGPlayerController::EnsureDeepSeekAgentService()
+{
+	if (!DeepSeekAgentService)
+	{
+		DeepSeekAgentService = NewObject<UDNGDeepSeekAgentService>(this);
+	}
+
+	if (DeepSeekAgentService)
+	{
+		if (const UDNGGameInstance* DNGGameInstance = Cast<UDNGGameInstance>(GetGameInstance()))
+		{
+			DeepSeekAgentService->Configure(DNGGameInstance->GetDeepSeekConfig());
+		}
+	}
+}
+
+// Applies an asynchronous DeepSeek result and schedules playback if valid.
+void ADNGPlayerController::HandleAgentPlanResult(bool bSuccess, const FDNGDeepSeekDrawingPlan& Plan, const FString& ErrorMessage)
+{
+	bAgentRequestInFlight = false;
+
+	if (!bSuccess)
+	{
+		AgentStatusMessage = ErrorMessage;
+		return;
+	}
+
+	const FString NormalizedAction = Plan.Action.TrimStartAndEnd().ToLower();
+	if (NormalizedAction == TEXT("noop"))
+	{
+		LastAgentRawResponse = Plan.RawModelContent;
+		AgentStatusMessage = Plan.Summary.IsEmpty() ? TEXT("Agent ignored the instruction because it was not a drawing request.") : Plan.Summary;
+		return;
+	}
+
+	FinalizeAgentPlan(Plan);
+}
+
+// Stores the accepted final SVG and schedules its playback.
+void ADNGPlayerController::FinalizeAgentPlan(const FDNGDeepSeekDrawingPlan& Plan)
+{
+	LastAgentSvg = Plan.Svg;
+	LastAgentRawResponse = Plan.RawModelContent;
+	UE_LOG(LogTemp, Log, TEXT("DeepSeek parsed action=%s summary=%s svg_length=%d"), *Plan.Action, *Plan.Summary, Plan.Svg.Len());
+	QueueAgentSvgPlayback(Plan);
+}
+
+// Parses the final SVG into sampled board segments, clears the board, and starts timed playback.
+void ADNGPlayerController::QueueAgentSvgPlayback(const FDNGDeepSeekDrawingPlan& Plan)
+{
+	QueuedAgentSegments.Reset();
+	NextAgentSegmentIndex = 0;
+
+	FDNGSvgParseOptions ParseOptions;
+	ParseOptions.SmallThickness = 4.0f;
+	ParseOptions.MediumThickness = 7.0f;
+	ParseOptions.LargeThickness = 12.0f;
+	ParseOptions.MaxSegmentLength = MaxSegmentLength;
+
+	FString ParseError;
+	if (!FDNGSvgParser::ParseSvgToSegments(Plan.Svg, ParseOptions, QueuedAgentSegments, ParseError))
+	{
+		AgentStatusMessage = FString::Printf(TEXT("Agent SVG parse failed: %s"), *ParseError);
+		return;
+	}
+
+	if (QueuedAgentSegments.Num() == 0)
+	{
+		AgentStatusMessage = TEXT("DeepSeek returned SVG, but it did not produce any usable stroke segments.");
+		return;
+	}
+
+	if (ADNGBoardActor* BoardActor = GetBoardActor())
+	{
+		BoardActor->ClearBoard();
+	}
+	ServerClearBoardForAgent();
+
+	AgentStatusMessage = FString::Printf(
+		TEXT("Agent SVG ready: %s (%d segments queued)"),
+		Plan.Summary.IsEmpty() ? TEXT("drawing") : *Plan.Summary,
+		QueuedAgentSegments.Num());
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(AgentPlaybackTimerHandle);
+		World->GetTimerManager().SetTimer(AgentPlaybackTimerHandle, this, &ADNGPlayerController::PlayNextAgentSegment, AgentPlaybackInterval, true);
+	}
+}
+
+// Plays one queued agent-generated segment per timer tick.
+void ADNGPlayerController::PlayNextAgentSegment()
+{
+	if (NextAgentSegmentIndex >= QueuedAgentSegments.Num())
+	{
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().ClearTimer(AgentPlaybackTimerHandle);
+		}
+
+		QueuedAgentSegments.Reset();
+		NextAgentSegmentIndex = 0;
+		AgentStatusMessage = TEXT("Agent drawing playback finished.");
+		return;
+	}
+
+	EmitResolvedSegment(QueuedAgentSegments[NextAgentSegmentIndex]);
+	++NextAgentSegmentIndex;
+}
+
+// Resets local agent state whenever the authoritative round number changes.
+void ADNGPlayerController::RefreshAgentRoundState()
+{
+	const ADNGGameState* DNGGameState = GetDNGGameState();
+	if (!DNGGameState)
+	{
+		return;
+	}
+
+	const int32 CurrentRoundNumber = DNGGameState->GetRoundNumber();
+	if (LastObservedRoundNumber == INDEX_NONE)
+	{
+		LastObservedRoundNumber = CurrentRoundNumber;
+		return;
+	}
+
+	if (CurrentRoundNumber != LastObservedRoundNumber)
+	{
+		LastObservedRoundNumber = CurrentRoundNumber;
+		ResetAgentSession();
+		AgentStatusMessage = TEXT("Agent session reset for the new round.");
+	}
 }
 
 // Typed helper for accessing the replicated GameState.

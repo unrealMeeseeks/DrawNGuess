@@ -82,30 +82,29 @@ void UDNGMainMenuWidget::BuildWidgetTree()
 	JoinAddressInput = WidgetTree->ConstructWidget<UEditableTextBox>(UEditableTextBox::StaticClass(), TEXT("JoinAddressInput"));
 	Content->AddChildToVerticalBox(JoinAddressInput);
 
+	Content->AddChildToVerticalBox(MakeLabel(WidgetTree, TEXT("DeepSeek API key")));
+	DeepSeekApiKeyInput = WidgetTree->ConstructWidget<UEditableTextBox>(UEditableTextBox::StaticClass(), TEXT("DeepSeekApiKeyInput"));
+	Content->AddChildToVerticalBox(DeepSeekApiKeyInput);
+
+	Content->AddChildToVerticalBox(MakeLabel(WidgetTree, TEXT("DeepSeek base URL")));
+	DeepSeekBaseUrlInput = WidgetTree->ConstructWidget<UEditableTextBox>(UEditableTextBox::StaticClass(), TEXT("DeepSeekBaseUrlInput"));
+	Content->AddChildToVerticalBox(DeepSeekBaseUrlInput);
+
+	Content->AddChildToVerticalBox(MakeLabel(WidgetTree, TEXT("DeepSeek model")));
+	DeepSeekModelInput = WidgetTree->ConstructWidget<UEditableTextBox>(UEditableTextBox::StaticClass(), TEXT("DeepSeekModelInput"));
+	Content->AddChildToVerticalBox(DeepSeekModelInput);
+
 	SaveButton = MakeButton(WidgetTree, TEXT("Save Prompt"));
+	SaveAgentConfigButton = MakeButton(WidgetTree, TEXT("Save DeepSeek Config"));
 	HostButton = MakeButton(WidgetTree, TEXT("Host Game"));
 	JoinButton = MakeButton(WidgetTree, TEXT("Join Game"));
 	StatusText = MakeLabel(WidgetTree, TEXT(""), 14);
 
 	Content->AddChildToVerticalBox(SaveButton);
+	Content->AddChildToVerticalBox(SaveAgentConfigButton);
 	Content->AddChildToVerticalBox(HostButton);
 	Content->AddChildToVerticalBox(JoinButton);
 	Content->AddChildToVerticalBox(StatusText);
-
-	if (SaveButton)
-	{
-		SaveButton->OnClicked.AddDynamic(this, &UDNGMainMenuWidget::HandleSaveClicked);
-	}
-
-	if (HostButton)
-	{
-		HostButton->OnClicked.AddDynamic(this, &UDNGMainMenuWidget::HandleHostClicked);
-	}
-
-	if (JoinButton)
-	{
-		JoinButton->OnClicked.AddDynamic(this, &UDNGMainMenuWidget::HandleJoinClicked);
-	}
 }
 
 void UDNGMainMenuWidget::BindActions()
@@ -126,6 +125,12 @@ void UDNGMainMenuWidget::BindActions()
 	{
 		JoinButton->OnClicked.RemoveDynamic(this, &UDNGMainMenuWidget::HandleJoinClicked);
 		JoinButton->OnClicked.AddDynamic(this, &UDNGMainMenuWidget::HandleJoinClicked);
+	}
+
+	if (SaveAgentConfigButton)
+	{
+		SaveAgentConfigButton->OnClicked.RemoveDynamic(this, &UDNGMainMenuWidget::HandleSaveAgentConfigClicked);
+		SaveAgentConfigButton->OnClicked.AddDynamic(this, &UDNGMainMenuWidget::HandleSaveAgentConfigClicked);
 	}
 }
 
@@ -149,6 +154,23 @@ void UDNGMainMenuWidget::LoadSavedValues()
 		if (JoinAddressInput)
 		{
 			JoinAddressInput->SetText(FText::FromString(Settings.LastJoinAddress));
+		}
+
+		const FDNGDeepSeekConfig& DeepSeekConfig = GameInstance->GetDeepSeekConfig();
+
+		if (DeepSeekApiKeyInput)
+		{
+			DeepSeekApiKeyInput->SetText(FText::FromString(DeepSeekConfig.ApiKey));
+		}
+
+		if (DeepSeekBaseUrlInput)
+		{
+			DeepSeekBaseUrlInput->SetText(FText::FromString(DeepSeekConfig.BaseUrl));
+		}
+
+		if (DeepSeekModelInput)
+		{
+			DeepSeekModelInput->SetText(FText::FromString(DeepSeekConfig.Model));
 		}
 	}
 }
@@ -205,5 +227,22 @@ void UDNGMainMenuWidget::HandleSaveClicked()
 	if (StatusText)
 	{
 		StatusText->SetText(FText::FromString(TEXT("Prompt settings saved locally.")));
+	}
+}
+
+void UDNGMainMenuWidget::HandleSaveAgentConfigClicked()
+{
+	if (UDNGGameInstance* GameInstance = Cast<UDNGGameInstance>(GetGameInstance()))
+	{
+		GameInstance->UpdateDeepSeekConfig(
+			DeepSeekApiKeyInput ? DeepSeekApiKeyInput->GetText().ToString() : FString(),
+			DeepSeekBaseUrlInput ? DeepSeekBaseUrlInput->GetText().ToString() : FString(),
+			DeepSeekModelInput ? DeepSeekModelInput->GetText().ToString() : FString(),
+			true);
+
+		if (StatusText)
+		{
+			StatusText->SetText(FText::FromString(FString::Printf(TEXT("DeepSeek config saved to %s"), *GameInstance->GetDeepSeekConfigPath())));
+		}
 	}
 }

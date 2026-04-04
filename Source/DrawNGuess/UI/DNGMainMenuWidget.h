@@ -40,6 +40,9 @@ private:
 	UFUNCTION()
 	void HandleSaveClicked();
 
+	UFUNCTION()
+	void HandleSaveAgentConfigClicked();
+
 	// Prompt prefix input fields.
 	UPROPERTY(BlueprintReadOnly, Category = "MainMenu", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
 	TObjectPtr<UEditableTextBox> PositivePrefixInput = nullptr;
@@ -51,6 +54,15 @@ private:
 	TObjectPtr<UEditableTextBox> JoinAddressInput = nullptr;
 
 	UPROPERTY(BlueprintReadOnly, Category = "MainMenu", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
+	TObjectPtr<UEditableTextBox> DeepSeekApiKeyInput = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category = "MainMenu", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
+	TObjectPtr<UEditableTextBox> DeepSeekBaseUrlInput = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category = "MainMenu", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
+	TObjectPtr<UEditableTextBox> DeepSeekModelInput = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category = "MainMenu", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
 	TObjectPtr<UButton> HostButton = nullptr;
 
 	UPROPERTY(BlueprintReadOnly, Category = "MainMenu", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
@@ -58,6 +70,9 @@ private:
 
 	UPROPERTY(BlueprintReadOnly, Category = "MainMenu", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
 	TObjectPtr<UButton> SaveButton = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category = "MainMenu", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))
+	TObjectPtr<UButton> SaveAgentConfigButton = nullptr;
 
 	// Status line shown under the menu controls.
 	UPROPERTY(BlueprintReadOnly, Category = "MainMenu", meta = (BindWidgetOptional, AllowPrivateAccess = "true"))

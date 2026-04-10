@@ -186,8 +186,14 @@ private:
 	// Finalizes one accepted agent plan into SVG playback.
 	void FinalizeAgentPlan(const FDNGDeepSeekDrawingPlan& Plan);
 
-	// Parses the authoritative SVG and starts playback after the board has been cleared.
+	// Builds a board-derived SVG snapshot used as revision context for the agent.
+	bool BuildCurrentBoardSvgContext(FString& OutSvgContext) const;
+
+	// Parses the authoritative SVG, computes the delta from the current board, and starts playback.
 	void QueueAgentSvgPlayback(const FDNGDeepSeekDrawingPlan& Plan);
+
+	// Converts the current board and target SVG into an erase-then-draw playback sequence.
+	void BuildAgentDiffPlaybackSegments(const TArray<FDNGDrawSegment>& CurrentSegments, const TArray<FDNGDrawSegment>& TargetSegments, TArray<FDNGDrawSegment>& OutPlaybackSegments) const;
 
 	// Replays one queued segment every timer tick.
 	void PlayNextAgentSegment();

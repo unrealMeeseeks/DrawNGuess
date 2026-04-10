@@ -13,8 +13,23 @@
 #include "Misc/DateTime.h"
 #include "Misc/Paths.h"
 #include "Engine/StaticMesh.h"
+#include "Math/Color.h"
 #include "Net/UnrealNetwork.h"
 #include "UObject/ConstructorHelpers.h"
+
+namespace
+{
+	static FString FormatSvgFloat(float Value)
+	{
+		return FString::SanitizeFloat(Value, 2);
+	}
+
+	static FString LinearColorToSvgColor(const FLinearColor& Color)
+	{
+		const FColor QuantizedColor = Color.ToFColor(true);
+		return FString::Printf(TEXT("#%02X%02X%02X"), QuantizedColor.R, QuantizedColor.G, QuantizedColor.B);
+	}
+}
 
 // Initializes the default board mesh, camera, collision, and network update settings.
 ADNGBoardActor::ADNGBoardActor()
@@ -221,6 +236,86 @@ bool ADNGBoardActor::SaveBoardImage(FString& OutSavedPath)
 	UKismetRenderingLibrary::ExportRenderTarget(World, BoardRenderTarget, SaveDirectory, FileName);
 
 	OutSavedPath = FPaths::Combine(SaveDirectory, FileName);
+	return true;
+}
+
+// Returns the segments that currently define the visible board image on this machine.
+void ADNGBoardActor::GetVisibleSegments(TArray<FDNGDrawSegment>& OutSegments) const
+{
+	OutSegments = Segments;
+	OutSegments.Append(PendingPredictedSegments);
+}
+
+// Converts the current visible board stroke history into a compact standalone SVG snapshot.
+bool ADNGBoardActor::BuildBoardSvgSnapshot(FString& OutSvg) const
+{
+	OutSvg.Reset();
+
+	TArray<FDNGDrawSegment> VisibleSegments;
+	GetVisibleSegments(VisibleSegments);
+
+	FString Svg = TEXT("<svg viewBox=\"0 0 512 512\" xmlns=\"http://www.w3.org/2000/svg\">");
+	Svg += TEXT("<rect width=\"512\" height=\"512\" fill=\"white\"/>");
+
+	auto AppendPath = [&Svg](const FString& PathData, const FString& StrokeColor, float StrokeWidth)
+	{
+		if (PathData.IsEmpty())
+		{
+			return;
+		}
+
+		Svg += FString::Printf(
+			TEXT("<path d=\"%s\" fill=\"none\" stroke=\"%s\" stroke-width=\"%s\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>"),
+			*PathData,
+			*StrokeColor,
+			*FormatSvgFloat(StrokeWidth));
+	};
+
+	FString CurrentPathData;
+	FString CurrentStrokeColor;
+	float CurrentStrokeWidth = 0.0f;
+	FVector2D CurrentEnd = FVector2D::ZeroVector;
+	bool bHasOpenPath = false;
+
+	for (const FDNGDrawSegment& Segment : VisibleSegments)
+	{
+		const FVector2D StartPoint(Segment.Start.X * 512.0f, Segment.Start.Y * 512.0f);
+		const FVector2D EndPoint(Segment.End.X * 512.0f, Segment.End.Y * 512.0f);
+		const FString StrokeColor = LinearColorToSvgColor(Segment.Tool == EDNGDrawTool::Eraser ? FLinearColor::White : Segment.Color);
+		const float StrokeWidth = FMath::Max(1.0f, Segment.Thickness * (512.0f / static_cast<float>(RenderTargetSize.X)));
+		const bool bContinuePath =
+			bHasOpenPath
+			&& CurrentStrokeColor == StrokeColor
+			&& FMath::IsNearlyEqual(CurrentStrokeWidth, StrokeWidth, 0.01f)
+			&& CurrentEnd.Equals(StartPoint, 0.25f);
+
+		if (!bContinuePath)
+		{
+			if (bHasOpenPath)
+			{
+				AppendPath(CurrentPathData, CurrentStrokeColor, CurrentStrokeWidth);
+			}
+
+			CurrentPathData = FString::Printf(TEXT("M %s %s L %s %s"), *FormatSvgFloat(StartPoint.X), *FormatSvgFloat(StartPoint.Y), *FormatSvgFloat(EndPoint.X), *FormatSvgFloat(EndPoint.Y));
+			CurrentStrokeColor = StrokeColor;
+			CurrentStrokeWidth = StrokeWidth;
+			bHasOpenPath = true;
+		}
+		else
+		{
+			CurrentPathData += FString::Printf(TEXT(" L %s %s"), *FormatSvgFloat(EndPoint.X), *FormatSvgFloat(EndPoint.Y));
+		}
+
+		CurrentEnd = EndPoint;
+	}
+
+	if (bHasOpenPath)
+	{
+		AppendPath(CurrentPathData, CurrentStrokeColor, CurrentStrokeWidth);
+	}
+
+	Svg += TEXT("</svg>");
+	OutSvg = Svg;
 	return true;
 }
 

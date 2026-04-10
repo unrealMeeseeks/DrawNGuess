@@ -16,6 +16,181 @@
 #include "TimerManager.h"
 #include "Engine/World.h"
 
+namespace
+{
+	constexpr int32 AgentDiffRasterWidth = 128;
+	constexpr int32 AgentDiffRasterHeight = 128;
+	constexpr float AgentDiffEraserThickness = 18.0f;
+
+	static uint8 ResolveRasterColorIndex(const FDNGDrawSegment& Segment)
+	{
+		if (Segment.Tool == EDNGDrawTool::Eraser)
+		{
+			return 0;
+		}
+
+		const TArray<FLinearColor> Palette =
+		{
+			FLinearColor::Black,
+			FLinearColor(0.85f, 0.15f, 0.15f, 1.0f),
+			FLinearColor(0.15f, 0.35f, 0.95f, 1.0f),
+			FLinearColor(0.15f, 0.7f, 0.25f, 1.0f)
+		};
+
+		double BestDistance = TNumericLimits<double>::Max();
+		uint8 BestIndex = 1;
+		for (int32 Index = 0; Index < Palette.Num(); ++Index)
+		{
+			const FVector Delta(Segment.Color.R - Palette[Index].R, Segment.Color.G - Palette[Index].G, Segment.Color.B - Palette[Index].B);
+			const double Distance = Delta.SizeSquared();
+			if (Distance < BestDistance)
+			{
+				BestDistance = Distance;
+				BestIndex = static_cast<uint8>(Index + 1);
+			}
+		}
+
+		return BestIndex;
+	}
+
+	static FIntPoint UVToRasterPoint(const FVector2D& UV)
+	{
+		return FIntPoint(
+			FMath::Clamp(FMath::RoundToInt(UV.X * static_cast<float>(AgentDiffRasterWidth - 1)), 0, AgentDiffRasterWidth - 1),
+			FMath::Clamp(FMath::RoundToInt(UV.Y * static_cast<float>(AgentDiffRasterHeight - 1)), 0, AgentDiffRasterHeight - 1));
+	}
+
+	static FVector2D RasterPointToUV(float X, float Y)
+	{
+		return FVector2D(
+			FMath::Clamp(X / static_cast<float>(AgentDiffRasterWidth - 1), 0.0f, 1.0f),
+			FMath::Clamp(Y / static_cast<float>(AgentDiffRasterHeight - 1), 0.0f, 1.0f));
+	}
+
+	static void StampRasterDisc(TArray<uint8>& Raster, int32 CenterX, int32 CenterY, int32 Radius, uint8 Value)
+	{
+		const int32 ClampedRadius = FMath::Max(1, Radius);
+		const int32 RadiusSquared = ClampedRadius * ClampedRadius;
+		for (int32 Y = CenterY - ClampedRadius; Y <= CenterY + ClampedRadius; ++Y)
+		{
+			if (Y < 0 || Y >= AgentDiffRasterHeight)
+			{
+				continue;
+			}
+
+			for (int32 X = CenterX - ClampedRadius; X <= CenterX + ClampedRadius; ++X)
+			{
+				if (X < 0 || X >= AgentDiffRasterWidth)
+				{
+					continue;
+				}
+
+				const int32 DeltaX = X - CenterX;
+				const int32 DeltaY = Y - CenterY;
+				if ((DeltaX * DeltaX) + (DeltaY * DeltaY) <= RadiusSquared)
+				{
+					Raster[(Y * AgentDiffRasterWidth) + X] = Value;
+				}
+			}
+		}
+	}
+
+	static void RasterizeSegments(const TArray<FDNGDrawSegment>& Segments, TArray<uint8>& OutRaster)
+	{
+		OutRaster.Init(0, AgentDiffRasterWidth * AgentDiffRasterHeight);
+
+		for (const FDNGDrawSegment& Segment : Segments)
+		{
+			const FIntPoint Start = UVToRasterPoint(Segment.Start);
+			const FIntPoint End = UVToRasterPoint(Segment.End);
+			const float Distance = FVector2D::Distance(FVector2D(Start), FVector2D(End));
+			const int32 SampleCount = Distance <= KINDA_SMALL_NUMBER ? 1 : FMath::Max(1, FMath::CeilToInt(Distance * 2.0f));
+			const int32 Radius = FMath::Max(1, FMath::RoundToInt((Segment.Thickness / 2048.0f) * static_cast<float>(AgentDiffRasterWidth) * 0.9f));
+			const uint8 Value = ResolveRasterColorIndex(Segment);
+
+			for (int32 SampleIndex = 0; SampleIndex <= SampleCount; ++SampleIndex)
+			{
+				const float Alpha = static_cast<float>(SampleIndex) / static_cast<float>(SampleCount);
+				const int32 X = FMath::RoundToInt(FMath::Lerp(static_cast<float>(Start.X), static_cast<float>(End.X), Alpha));
+				const int32 Y = FMath::RoundToInt(FMath::Lerp(static_cast<float>(Start.Y), static_cast<float>(End.Y), Alpha));
+				StampRasterDisc(OutRaster, X, Y, Radius, Value);
+			}
+		}
+	}
+
+	static bool SegmentTouchesChangeMask(const FDNGDrawSegment& Segment, const TArray<uint8>& ChangeMask)
+	{
+		const FIntPoint Start = UVToRasterPoint(Segment.Start);
+		const FIntPoint End = UVToRasterPoint(Segment.End);
+		const float Distance = FVector2D::Distance(FVector2D(Start), FVector2D(End));
+		const int32 SampleCount = Distance <= KINDA_SMALL_NUMBER ? 1 : FMath::Max(1, FMath::CeilToInt(Distance * 2.0f));
+		const int32 Radius = FMath::Max(1, FMath::RoundToInt((Segment.Thickness / 2048.0f) * static_cast<float>(AgentDiffRasterWidth) * 0.75f));
+		for (int32 SampleIndex = 0; SampleIndex <= SampleCount; ++SampleIndex)
+		{
+			const float Alpha = static_cast<float>(SampleIndex) / static_cast<float>(SampleCount);
+			const int32 CenterX = FMath::RoundToInt(FMath::Lerp(static_cast<float>(Start.X), static_cast<float>(End.X), Alpha));
+			const int32 CenterY = FMath::RoundToInt(FMath::Lerp(static_cast<float>(Start.Y), static_cast<float>(End.Y), Alpha));
+			for (int32 Y = CenterY - Radius; Y <= CenterY + Radius; ++Y)
+			{
+				if (Y < 0 || Y >= AgentDiffRasterHeight)
+				{
+					continue;
+				}
+				for (int32 X = CenterX - Radius; X <= CenterX + Radius; ++X)
+				{
+					if (X < 0 || X >= AgentDiffRasterWidth)
+					{
+						continue;
+					}
+					if (ChangeMask[(Y * AgentDiffRasterWidth) + X] != 0)
+					{
+						return true;
+					}
+				}
+			}
+		}
+
+		return false;
+	}
+
+	static void BuildEraserSegmentsFromMask(const TArray<uint8>& RemoveMask, TArray<FDNGDrawSegment>& OutSegments)
+	{
+		const int32 Radius = FMath::Max(1, FMath::RoundToInt((AgentDiffEraserThickness / 2048.0f) * static_cast<float>(AgentDiffRasterWidth) * 0.9f));
+		const int32 RowStep = FMath::Max(1, Radius);
+		for (int32 Y = 0; Y < AgentDiffRasterHeight; Y += RowStep)
+		{
+			int32 X = 0;
+			while (X < AgentDiffRasterWidth)
+			{
+				while (X < AgentDiffRasterWidth && RemoveMask[(Y * AgentDiffRasterWidth) + X] == 0)
+				{
+					++X;
+				}
+
+				if (X >= AgentDiffRasterWidth)
+				{
+					break;
+				}
+
+				const int32 StartX = X;
+				while (X < AgentDiffRasterWidth && RemoveMask[(Y * AgentDiffRasterWidth) + X] != 0)
+				{
+					++X;
+				}
+
+				const int32 EndX = X - 1;
+				FDNGDrawSegment Segment;
+				Segment.Tool = EDNGDrawTool::Eraser;
+				Segment.Color = FLinearColor::White;
+				Segment.Thickness = AgentDiffEraserThickness;
+				Segment.Start = RasterPointToUV(static_cast<float>(StartX), static_cast<float>(Y));
+				Segment.End = RasterPointToUV(static_cast<float>(EndX), static_cast<float>(Y));
+				OutSegments.Add(Segment);
+			}
+		}
+	}
+}
+
 // Enables mouse-driven interaction and sets default fallback widget classes.
 ADNGPlayerController::ADNGPlayerController()
 {
@@ -189,10 +364,13 @@ void ADNGPlayerController::RequestAgentInstruction(const FString& Instruction)
 	PendingAgentOriginalInstruction = TrimmedInstruction;
 	AgentStatusMessage = TEXT("Requesting DeepSeek SVG...");
 
+	FString CurrentSvgContext;
+	BuildCurrentBoardSvgContext(CurrentSvgContext);
+
 	TWeakObjectPtr<ADNGPlayerController> WeakThis(this);
 	DeepSeekAgentService->RequestDrawingPlan(
 		TrimmedInstruction,
-		LastAgentSvg,
+		CurrentSvgContext,
 		UDNGDeepSeekAgentService::FOnDeepSeekPlanCompleted::CreateLambda(
 			[WeakThis](bool bSuccess, const FDNGDeepSeekDrawingPlan& Plan, const FString& ErrorMessage)
 			{
@@ -662,7 +840,67 @@ void ADNGPlayerController::FinalizeAgentPlan(const FDNGDeepSeekDrawingPlan& Plan
 	QueueAgentSvgPlayback(Plan);
 }
 
-// Parses the final SVG into sampled board segments, clears the board, and starts timed playback.
+// Builds a board-derived SVG snapshot so agent revisions operate on the actual visible board.
+bool ADNGPlayerController::BuildCurrentBoardSvgContext(FString& OutSvgContext) const
+{
+	OutSvgContext.Reset();
+
+	if (const ADNGBoardActor* BoardActor = GetBoardActor())
+	{
+		return BoardActor->BuildBoardSvgSnapshot(OutSvgContext);
+	}
+
+	return false;
+}
+
+// Builds an erase-then-draw playback list that preserves identical board regions.
+void ADNGPlayerController::BuildAgentDiffPlaybackSegments(const TArray<FDNGDrawSegment>& CurrentSegments, const TArray<FDNGDrawSegment>& TargetSegments, TArray<FDNGDrawSegment>& OutPlaybackSegments) const
+{
+	OutPlaybackSegments.Reset();
+
+	if (CurrentSegments.Num() == 0)
+	{
+		OutPlaybackSegments = TargetSegments;
+		return;
+	}
+
+	TArray<uint8> CurrentRaster;
+	TArray<uint8> TargetRaster;
+	RasterizeSegments(CurrentSegments, CurrentRaster);
+	RasterizeSegments(TargetSegments, TargetRaster);
+
+	TArray<uint8> RemoveMask;
+	TArray<uint8> AddMask;
+	RemoveMask.Init(0, CurrentRaster.Num());
+	AddMask.Init(0, CurrentRaster.Num());
+
+	for (int32 Index = 0; Index < CurrentRaster.Num(); ++Index)
+	{
+		const uint8 CurrentValue = CurrentRaster[Index];
+		const uint8 TargetValue = TargetRaster[Index];
+		if (CurrentValue != 0 && CurrentValue != TargetValue)
+		{
+			RemoveMask[Index] = 1;
+		}
+
+		if (TargetValue != 0 && TargetValue != CurrentValue)
+		{
+			AddMask[Index] = 1;
+		}
+	}
+
+	BuildEraserSegmentsFromMask(RemoveMask, OutPlaybackSegments);
+
+	for (const FDNGDrawSegment& Segment : TargetSegments)
+	{
+		if (SegmentTouchesChangeMask(Segment, AddMask))
+		{
+			OutPlaybackSegments.Add(Segment);
+		}
+	}
+}
+
+// Parses the final SVG into sampled board segments, computes the board delta, and starts timed playback.
 void ADNGPlayerController::QueueAgentSvgPlayback(const FDNGDeepSeekDrawingPlan& Plan)
 {
 	QueuedAgentSegments.Reset();
@@ -687,14 +925,24 @@ void ADNGPlayerController::QueueAgentSvgPlayback(const FDNGDeepSeekDrawingPlan& 
 		return;
 	}
 
-	if (ADNGBoardActor* BoardActor = GetBoardActor())
+	TArray<FDNGDrawSegment> CurrentSegments;
+	if (const ADNGBoardActor* BoardActor = GetBoardActor())
 	{
-		BoardActor->ClearBoard();
+		BoardActor->GetVisibleSegments(CurrentSegments);
 	}
-	ServerClearBoardForAgent();
+
+	TArray<FDNGDrawSegment> PlaybackSegments;
+	BuildAgentDiffPlaybackSegments(CurrentSegments, QueuedAgentSegments, PlaybackSegments);
+	QueuedAgentSegments = MoveTemp(PlaybackSegments);
+
+	if (QueuedAgentSegments.Num() == 0)
+	{
+		AgentStatusMessage = TEXT("Agent revision produced no visible board changes.");
+		return;
+	}
 
 	AgentStatusMessage = FString::Printf(
-		TEXT("Agent SVG ready: %s (%d segments queued)"),
+		TEXT("Agent SVG ready: %s (%d delta segments queued)"),
 		Plan.Summary.IsEmpty() ? TEXT("drawing") : *Plan.Summary,
 		QueuedAgentSegments.Num());
 

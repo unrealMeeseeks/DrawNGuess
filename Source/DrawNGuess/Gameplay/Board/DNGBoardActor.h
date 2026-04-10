@@ -58,6 +58,13 @@ public:
 	UFUNCTION(BlueprintCallable)
 	bool SaveBoardImage(FString& OutSavedPath);
 
+	// Builds an SVG snapshot from the current visible board content for agent revision context.
+	UFUNCTION(BlueprintCallable)
+	bool BuildBoardSvgSnapshot(FString& OutSvg) const;
+
+	// Returns the locally visible segment history, including pending predicted segments.
+	void GetVisibleSegments(TArray<FDNGDrawSegment>& OutSegments) const;
+
 	// Adds an authoritative segment to the replicated board history.
 	void AddSegment(const FDNGDrawSegment& Segment);
 
